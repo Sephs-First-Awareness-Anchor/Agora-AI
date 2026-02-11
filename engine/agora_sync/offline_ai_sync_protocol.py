@@ -747,7 +747,7 @@ class SyncProtocol:
         """Get AI capability fingerprint."""
         # Import here to avoid circular dependency
         try:
-            from offline_ai_capabilities import CapabilityManager
+            from .offline_ai_capabilities import CapabilityManager
             manager = CapabilityManager(self.ai)
             manifest = manager.generate_manifest()
             return manifest.compute_fingerprint()

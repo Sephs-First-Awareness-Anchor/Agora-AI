@@ -66,14 +66,14 @@ else:
     JNIUS_AVAILABLE = False
 
 # Audio engine
-from offline_ai_audio_engine import create_audio_engine, VoiceParams
+from .offline_ai_audio_engine import create_audio_engine, VoiceParams
 
 # Vision capture
-from offline_ai_vision_capture import create_vision_capture, VisionFrame
+from .offline_ai_vision_capture import create_vision_capture, VisionFrame
 
 # Expression processing
-from offline_ai_expression import (
-    process_audio_prosody, 
+from .offline_ai_expression import (
+    process_audio_prosody,
     process_visual_gesture,
     AffectState,
     play_animation,
@@ -83,7 +83,7 @@ from offline_ai_expression import (
 
 # Corpus training - optional, only needed for training mode
 try:
-    from offline_ai_corpus_trainer import CorpusTrainer, quick_train_ai
+    from .offline_ai_corpus_trainer import CorpusTrainer, quick_train_ai
     HAS_CORPUS_TRAINER = True
 except ImportError as e:
     CorpusTrainer = None
@@ -631,7 +631,7 @@ class OfflineAIRuntime:
                 logger.info(f"[RUNTIME] Voice profile: {profile.fingerprint[:16]}...")
         
         if self.ai and hasattr(self.ai, 'summon'):
-            from offline_ai_expression import OnboardingProfile
+            from .offline_ai_expression import OnboardingProfile
             profile = OnboardingProfile(
                 user_name=getattr(self.ai, 'user_name', 'User'),
                 ai_name=self.ai_name,
@@ -1064,7 +1064,7 @@ class OfflineAIRuntime:
                 # Process percepts for template evolution
                 for obj in signal.objects_detected:
                     if obj not in self.ai.vision.percept_templates:
-                        from offline_ai_expression import VisionPerceptTemplate
+                        from .offline_ai_expression import VisionPerceptTemplate
                         self.ai.vision.percept_templates[obj] = VisionPerceptTemplate(obj)
                     template = self.ai.vision.percept_templates[obj]
                     template.usage_count += 1
@@ -1432,7 +1432,7 @@ class OfflineAIRuntime:
         
         if hasattr(self.ai, 'run_intro'):
             try:
-                from offline_ai_expression import OnboardingProfile
+                from .offline_ai_expression import OnboardingProfile
                 profile = OnboardingProfile(
                     user_name=getattr(self.ai, 'user_name', 'User'),
                     ai_name=self.ai_name,

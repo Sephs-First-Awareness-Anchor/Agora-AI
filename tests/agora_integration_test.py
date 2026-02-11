@@ -19,30 +19,30 @@ import shutil
 from pathlib import Path
 
 # Import Agora modules
-from offline_ai_capabilities import (
+from engine.agora_sync.offline_ai_capabilities import (
     SpecializationType, SpecializationProfile, ModuleVersion,
     CapabilityManifest, ModuleHasher, CapabilityManager,
     create_default_specialization, get_learning_budget
 )
 
-from offline_ai_sync_protocol import (
+from engine.agora_sync.offline_ai_sync_protocol import (
     PackOrigin, SyncMode, SelectionPolicy, ValidationResult,
     CapabilityArtifact, CapabilityPack, PackSanitizer,
     ImportReport, SandboxResult, SyncProtocol
 )
 
-from offline_ai_agora_ledger import (
+from engine.agora_sync.offline_ai_agora_ledger import (
     EventType, ExchangeCategory, LibraryType,
     ExchangeEvent, PartnerLockout, LibraryEntry,
     AgoraLedger, create_ledger_for_ai
 )
 
-from offline_ai_runtime_agora import (
+from engine.offline_ai_runtime_agora import (
     AgoraRuntimeState, LingerProof, AgoraRuntimeExtension,
     extend_runtime_with_agora, ProximityDetector
 )
 
-from offline_ai_library_extension import (
+from engine.offline_ai_library_extension import (
     MergePolicy, SliceType, ShareableSlice, MergeReport,
     LibrarySanitizer, LibraryExtension, create_library_extension
 )

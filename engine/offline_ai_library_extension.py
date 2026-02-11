@@ -422,7 +422,7 @@ class LibraryExtension:
     def _get_fingerprint(self) -> str:
         """Get AI capability fingerprint."""
         try:
-            from offline_ai_capabilities import CapabilityManager
+            from .offline_ai_capabilities import CapabilityManager
             manager = CapabilityManager(self.ai)
             manifest = manager.generate_manifest()
             return manifest.compute_fingerprint()
@@ -705,7 +705,7 @@ class LibraryExtension:
     def _add_lexical_entry(self, word: str, entry_data: Dict[str, Any]):
         """Add a lexical entry."""
         try:
-            from offline_ai_expression import LexemeEntry
+            from .offline_ai_expression import LexemeEntry
             entry = LexemeEntry(word)
             entry.frequency = entry_data.get("frequency", 0)
             entry.confidence = entry_data.get("confidence", 0.5)

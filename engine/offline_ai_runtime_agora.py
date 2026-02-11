@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 # Import base runtime components
 try:
-    from offline_ai_runtime import (
+    from .offline_ai_runtime import (
         AIRuntimeState, InteractionMode, OfflineAIRuntime,
         schedule_once, schedule_interval
     )
@@ -39,7 +39,7 @@ except ImportError:
 
 # Import Agora modules
 try:
-    from offline_ai_sync_protocol import (
+    from .agora_sync.offline_ai_sync_protocol import (
         SyncProtocol, CapabilityPack, SyncMode, SelectionPolicy,
         ValidationResult, ImportReport
     )
@@ -48,13 +48,13 @@ except ImportError:
     SYNC_PROTOCOL_AVAILABLE = False
 
 try:
-    from offline_ai_agora_ledger import AgoraLedger, ExchangeCategory
+    from .agora_sync.offline_ai_agora_ledger import AgoraLedger, ExchangeCategory
     LEDGER_AVAILABLE = True
 except ImportError:
     LEDGER_AVAILABLE = False
 
 try:
-    from offline_ai_capabilities import CapabilityManager
+    from .agora_sync.offline_ai_capabilities import CapabilityManager
     CAPABILITIES_AVAILABLE = True
 except ImportError:
     CAPABILITIES_AVAILABLE = False

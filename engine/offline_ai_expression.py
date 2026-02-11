@@ -91,7 +91,7 @@ from enum import Enum
 from pathlib import Path
 from collections import defaultdict, deque
 
-from offline_ai_system import add_version_metadata, engine as migration_engine, STATE_VERSION
+from .offline_ai_system import add_version_metadata, engine as migration_engine, STATE_VERSION
 
 logger = logging.getLogger(__name__)
 

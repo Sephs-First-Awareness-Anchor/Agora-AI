@@ -26,9 +26,9 @@ from pathlib import Path
 from datetime import datetime
 
 # Internal project imports that remain separate
-from offline_ai_memory import AccountLinkedMemory, DialogueNode, create_dialogue_node
-from offline_ai_expression import VoiceGnome, VisualCompetency, ExpressionStyle
-from offline_ai_system import add_version_metadata, engine as migration_engine, STATE_VERSION
+from .offline_ai_memory import AccountLinkedMemory, DialogueNode, create_dialogue_node
+from .offline_ai_expression import VoiceGnome, VisualCompetency, ExpressionStyle
+from .offline_ai_system import add_version_metadata, engine as migration_engine, STATE_VERSION
 
 logger = logging.getLogger(__name__)
 
