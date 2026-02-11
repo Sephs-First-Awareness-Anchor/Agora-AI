@@ -1,0 +1,190 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build APK with Buildozer
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache Buildozer global directory
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer
+          key: buildozer-global-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            buildozer-global-${{ runner.os }}-
+
+      - name: Cache Buildozer build directory
+        uses: actions/cache@v4
+        with:
+          path: |
+            .buildozer
+          key: buildozer-local-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('**/*.py') }}
+          restore-keys: |
+            buildozer-local-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-
+            buildozer-local-${{ runner.os }}-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            git \
+            python3-pip \
+            ffmpeg \
+            libsdl2-dev \
+            libsdl2-image-dev \
+            libsdl2-mixer-dev \
+            libsdl2-ttf-dev \
+            libportmidi-dev \
+            libswscale-dev \
+            libavformat-dev \
+            libavcodec-dev \
+            zlib1g-dev \
+            libgstreamer1.0-dev \
+            gstreamer1.0-plugins-base \
+            libffi-dev \
+            autoconf \
+            automake \
+            cmake \
+            libtool \
+            pkg-config \
+            zip \
+            unzip \
+            openjdk-17-jdk
+
+      - name: Install Buildozer and dependencies
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install buildozer cython
+          pip install -r requirements.txt || true
+
+      - name: Build debug APK
+        run: |
+          yes | buildozer android debug 2>&1 | tee build.log
+        env:
+          ANDROID_SDK_ROOT: ${{ env.HOME }}/.buildozer/android/platform/android-sdk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agora-ai-debug-apk
+          path: bin/*.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          retention-days: 7
+
+  build-release:
+    name: Build Release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache Buildozer global directory
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer
+          key: buildozer-global-release-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            buildozer-global-release-${{ runner.os }}-
+
+      - name: Cache Buildozer build directory
+        uses: actions/cache@v4
+        with:
+          path: |
+            .buildozer
+          key: buildozer-local-release-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('**/*.py') }}
+          restore-keys: |
+            buildozer-local-release-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-
+            buildozer-local-release-${{ runner.os }}-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            git \
+            python3-pip \
+            ffmpeg \
+            libsdl2-dev \
+            libsdl2-image-dev \
+            libsdl2-mixer-dev \
+            libsdl2-ttf-dev \
+            libportmidi-dev \
+            libswscale-dev \
+            libavformat-dev \
+            libavcodec-dev \
+            zlib1g-dev \
+            libgstreamer1.0-dev \
+            gstreamer1.0-plugins-base \
+            libffi-dev \
+            autoconf \
+            automake \
+            cmake \
+            libtool \
+            pkg-config \
+            zip \
+            unzip \
+            openjdk-17-jdk
+
+      - name: Install Buildozer and dependencies
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install buildozer cython
+          pip install -r requirements.txt || true
+
+      - name: Build release APK
+        run: |
+          yes | buildozer android release 2>&1 | tee build-release.log
+        env:
+          ANDROID_SDK_ROOT: ${{ env.HOME }}/.buildozer/android/platform/android-sdk
+
+      - name: Upload release APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agora-ai-release-apk
+          path: bin/*.apk
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Upload release build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-release-log
+          path: build-release.log
+          retention-days: 7
