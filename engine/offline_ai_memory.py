@@ -64,8 +64,8 @@ except ImportError:
 from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
 from collections import defaultdict
-from offline_ai_expression import IdentityAnchor
-from offline_ai_system import add_version_metadata, engine as migration_engine, STATE_VERSION
+from .offline_ai_expression import IdentityAnchor
+from .offline_ai_system import add_version_metadata, engine as migration_engine, STATE_VERSION
 
 # ============================================================================
 # CONFIGURATION

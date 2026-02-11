@@ -26,7 +26,7 @@ from kivy.properties import StringProperty, NumericProperty, ListProperty
 from kivy.app import App
 from kivy.metrics import dp
 
-from theme import COLOR_THEMES, ThemeManager
+from app.ui.components.theme import COLOR_THEMES, ThemeManager
 
 
 class ColorButton(Button):

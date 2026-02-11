@@ -62,13 +62,13 @@ from pathlib import Path
 from datetime import datetime
 
 # Import all components
-from offline_ai_memory import MemoryManager, AccountLinkedMemory, DialogueNode, create_dialogue_node
-from offline_ai_logic import (
+from .offline_ai_memory import MemoryManager, AccountLinkedMemory, DialogueNode, create_dialogue_node
+from .offline_ai_logic import (
     LawSetRegistry, OfflineAIGovernor, PersonalizedParameters,
     OfflineAIDPME, MoralGovernor, OperatingMode,
     AUTONOMY_PERMANENT, ALIGNMENT_MIN, MAX_ALLELE_DOMINANCE
 )
-from offline_ai_expression import (
+from .offline_ai_expression import (
     LanguageBootstrap, VoiceProfileManager, Gene, FractalAllele, VoiceGnome,
     VisionManager, LexiconManager, AudioManager,
     AffectState, BOOT_PERSONAS, LETTER_PERSONA_MAP, COLOR_BIAS,
@@ -89,13 +89,13 @@ IS_ANDROID = sys.platform == "android" or 'ANDROID_ARGUMENT' in os.environ
 
 # Runtime integration - wrap in try/except to catch import failures
 try:
-    from offline_ai_runtime import OfflineAIRuntime, AIRuntimeUIAdapter
+    from .offline_ai_runtime import OfflineAIRuntime, AIRuntimeUIAdapter
 except ImportError as e:
     import logging
     logging.getLogger(__name__).warning(f"[OFFLINE AI] Could not import runtime: {e}")
     OfflineAIRuntime = None
     AIRuntimeUIAdapter = None
-from offline_ai_system import (
+from .offline_ai_system import (
     AccountManager, SerialCodeGenerator,
     JournalManager, StorageGovernor, SearchManager,
     ReplaySession, STATE_VERSION, add_version_metadata,
@@ -104,11 +104,11 @@ from offline_ai_system import (
     UnityIPCServer,
     IdentitySessionLock, CheckpointManager, RestoreEngine
 )
-from offline_ai_dynamics import OfflineAIEnergyRegulator, OfflineAIEntropicRegulator
+from .offline_ai_dynamics import OfflineAIEnergyRegulator, OfflineAIEntropicRegulator
 
 # Pretrained library loader for first-boot data injection
 try:
-    from pretrained_loader import load_all_pretrained, get_library_path
+    from .pretrained_loader import load_all_pretrained, get_library_path
     HAS_PRETRAINED_LOADER = True
 except ImportError:
     HAS_PRETRAINED_LOADER = False
@@ -255,7 +255,7 @@ class OfflineAI:
         self.face_widget = KivyFaceWidget(self.face_state, animator=self.face_animator)
 
         # Creative Face Engine (Nickelodeon-style logic)
-        from face_personality import CreativeFaceEngine
+        from .face_personality import CreativeFaceEngine
         self.creative_face = CreativeFaceEngine(self.face_widget, self)
 
         # Expression Engines
@@ -920,7 +920,7 @@ class OfflineAI:
         if self.android_audio:
             self.android_audio.mode = mode_str
 
-        from offline_ai_expression import update_bubble_state
+        from .offline_ai_expression import update_bubble_state
         update_bubble_state(self.presence_timeout, self.face_animator)
 
         logger.info(f"[OFFLINE AI] Mode set: {self.mode.value}, Extrovert: {self.is_extrovert}")
@@ -1347,7 +1347,7 @@ class OfflineAI:
         self.emote_runtime.update() # Update affect and expressions
 
         # Update bubble state (Introvert/Extrovert presence policy)
-        from offline_ai_expression import update_bubble_state
+        from .offline_ai_expression import update_bubble_state
         update_bubble_state(self.presence_timeout, self.face_animator)
 
         self.voice_bridge.apply_affect(self.affect) # Apply affect to voice

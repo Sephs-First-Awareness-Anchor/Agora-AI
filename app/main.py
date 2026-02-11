@@ -20,14 +20,14 @@ from kivy.core.window import Window
 from kivy.clock import Clock
 from kivy.properties import ObjectProperty, StringProperty, BooleanProperty
 
-from theme import ThemeManager, COLOR_THEMES
-from onboarding import OnboardingScreen
-from companion import CompanionScreen
+from app.ui.components.theme import ThemeManager, COLOR_THEMES
+from app.ui.screens.onboarding import OnboardingScreen
+from app.ui.screens.companion import CompanionScreen
 
 # Import core AI modules
-from offline_ai_core import OfflineAIFactory, OfflineAI
-from offline_ai_expression import OnboardingProfile
-from offline_ai_runtime import create_runtime, OfflineAIRuntime
+from engine.offline_ai_core import OfflineAIFactory, OfflineAI
+from engine.offline_ai_expression import OnboardingProfile
+from engine.offline_ai_runtime import create_runtime, OfflineAIRuntime
 
 logger = logging.getLogger(__name__)
 

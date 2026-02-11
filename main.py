@@ -13,7 +13,7 @@ import sys
 # Set environment for mobile
 os.environ['KIVY_LOG_LEVEL'] = 'info'
 
-from app import KOCompanionApp
+from app.main import KOCompanionApp
 
 if __name__ == '__main__':
     KOCompanionApp().run()
