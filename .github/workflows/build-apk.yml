@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    name: Build APK with Buildozer
+    name: Build Debug APK (Buildozer)
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
@@ -27,8 +27,9 @@ jobs:
         with:
           path: |
             ~/.buildozer
-          key: buildozer-global-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          key: buildozer-global-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('requirements.txt') }}
           restore-keys: |
+            buildozer-global-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-
             buildozer-global-${{ runner.os }}-
 
       - name: Cache Buildozer build directory
@@ -36,8 +37,9 @@ jobs:
         with:
           path: |
             .buildozer
-          key: buildozer-local-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('**/*.py') }}
+          key: buildozer-local-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('**/*.py') }}
           restore-keys: |
+            buildozer-local-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('requirements.txt') }}-
             buildozer-local-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-
             buildozer-local-${{ runner.os }}-
 
@@ -65,24 +67,38 @@ jobs:
             automake \
             cmake \
             libtool \
+            libtool-bin \
             pkg-config \
             zip \
             unzip \
             openjdk-17-jdk
 
-      - name: Install Buildozer and dependencies
+      - name: Install Buildozer and Python dependencies
         run: |
-          pip install --upgrade pip setuptools wheel
-          pip install buildozer cython
-          pip install -r requirements.txt || true
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install buildozer cython
+          python -m pip install -r requirements.txt
 
       - name: Build debug APK
+        shell: bash
         run: |
-          yes | buildozer android debug 2>&1 | tee build.log
+          set -euo pipefail
+          yes | buildozer -v android debug 2>&1 | tee build.log
         env:
           ANDROID_SDK_ROOT: ${{ env.HOME }}/.buildozer/android/platform/android-sdk
 
-      - name: Upload APK artifact
+      - name: List build outputs
+        if: always()
+        shell: bash
+        run: |
+          echo "== Root =="
+          ls -la
+          echo "== bin/ =="
+          ls -la bin || true
+          echo "== Find APK/AAB =="
+          find . -maxdepth 4 -type f \( -name "*.apk" -o -name "*.aab" \) -print || true
+
+      - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: agora-ai-debug-apk
@@ -96,10 +112,10 @@ jobs:
         with:
           name: build-log
           path: build.log
-          retention-days: 7
+          retention-days: 14
 
   build-release:
-    name: Build Release APK
+    name: Build Release APK (Buildozer)
     runs-on: ubuntu-latest
     timeout-minutes: 120
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -118,8 +134,9 @@ jobs:
         with:
           path: |
             ~/.buildozer
-          key: buildozer-global-release-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          key: buildozer-global-release-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('requirements.txt') }}
           restore-keys: |
+            buildozer-global-release-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-
             buildozer-global-release-${{ runner.os }}-
 
       - name: Cache Buildozer build directory
@@ -127,8 +144,9 @@ jobs:
         with:
           path: |
             .buildozer
-          key: buildozer-local-release-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('**/*.py') }}
+          key: buildozer-local-release-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('**/*.py') }}
           restore-keys: |
+            buildozer-local-release-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('requirements.txt') }}-
             buildozer-local-release-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-
             buildozer-local-release-${{ runner.os }}-
 
@@ -156,22 +174,36 @@ jobs:
             automake \
             cmake \
             libtool \
+            libtool-bin \
             pkg-config \
             zip \
             unzip \
             openjdk-17-jdk
 
-      - name: Install Buildozer and dependencies
+      - name: Install Buildozer and Python dependencies
         run: |
-          pip install --upgrade pip setuptools wheel
-          pip install buildozer cython
-          pip install -r requirements.txt || true
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install buildozer cython
+          python -m pip install -r requirements.txt
 
       - name: Build release APK
+        shell: bash
         run: |
-          yes | buildozer android release 2>&1 | tee build-release.log
+          set -euo pipefail
+          yes | buildozer -v android release 2>&1 | tee build-release.log
         env:
           ANDROID_SDK_ROOT: ${{ env.HOME }}/.buildozer/android/platform/android-sdk
+
+      - name: List build outputs
+        if: always()
+        shell: bash
+        run: |
+          echo "== Root =="
+          ls -la
+          echo "== bin/ =="
+          ls -la bin || true
+          echo "== Find APK/AAB =="
+          find . -maxdepth 4 -type f \( -name "*.apk" -o -name "*.aab" \) -print || true
 
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
@@ -187,4 +219,4 @@ jobs:
         with:
           name: build-release-log
           path: build-release.log
-          retention-days: 7
+          retention-days: 14
