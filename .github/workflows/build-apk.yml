@@ -7,66 +7,62 @@ on:
 
 jobs:
   build-release:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.10"
+          cache: "pip"
 
-      - name: Install system dependencies
+      - name: Install system deps (autotools/libffi/gstreamer)
         run: |
-          set -euxo pipefail
           sudo apt-get update
-          # Work around occasional dependency resolver hiccups on GitHub runners
-          sudo apt-get install -y --no-install-recommends libunwind-dev
           sudo apt-get install -y --no-install-recommends \
-            autoconf \
-            automake \
-            build-essential \
-            ccache \
-            cmake \
-            gettext \
-            git \
-            libffi-dev \
-            libssl-dev \
-            libtool \
-            libtool-bin \
+            git zip unzip rsync \
+            build-essential ccache \
             openjdk-17-jdk \
             pkg-config \
-            python3-dev \
-            python3-pip \
-            python3-setuptools \
-            python3-wheel \
-            unzip \
-            zip \
+            autoconf automake libtool libtool-bin autoconf-archive \
+            cmake \
+            libffi-dev libssl-dev \
+            libunwind-dev \
+            libz-dev zlib1g-dev \
+            libjpeg-dev libpng-dev \
             libsdl2-dev \
-            libsdl2-image-dev \
-            libsdl2-mixer-dev \
-            libsdl2-ttf-dev \
-            libjpeg-dev \
-            libpng-dev \
-            zlib1g-dev \
-            libgstreamer1.0-dev \
-            libgstreamer-plugins-base1.0-dev \
-            gstreamer1.0-plugins-base
-          sudo apt-get clean
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+            gstreamer1.0-tools \
+            python3-venv
 
-      - name: Install Buildozer
+      - name: Install Buildozer + python-for-android
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install --upgrade buildozer cython==0.29.36
+          python -m pip install --upgrade pip setuptools wheel
+          # Buildozer + p4a are sensitive to runner/toolchain drift; use freshest p4a
+          python -m pip install --upgrade \
+            cython==0.29.36 \
+            buildozer \
+            "python-for-android @ https://github.com/kivy/python-for-android/archive/refs/heads/master.zip"
 
-      - name: Build debug APK
+      - name: Build APK (debug)
+        env:
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+          ANDROID_HOME: /usr/local/lib/android/sdk
         run: |
-          buildozer android debug
+          buildozer -v android debug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: agoraai-debug-apk
-          path: bin/*.apk
+          name: agoraai-apk
+          path: |
+            bin/*.apk
+            **/bin/*.apk
+          if-no-files-found: error
+```0
