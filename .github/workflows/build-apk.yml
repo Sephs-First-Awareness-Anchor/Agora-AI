@@ -2,66 +2,578 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
+env:
+  PYTHON_VERSION: '3.11'
+  ANDROID_API: '33'
+  ANDROID_MINAPI: '21'
+  ANDROID_NDK: '25b'
+  ANDROID_SDK: '33'
+
 jobs:
-  build-release:
+  build:
+    name: Build Debug APK
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 180
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
-          cache: "pip"
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install system deps (autotools/libffi/gstreamer)
+      - name: Cache Buildozer global directory
+        uses: actions/cache@v4
+        with:
+          path: ~/.buildozer
+          key: buildozer-global-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}-${{ env.ANDROID_NDK }}
+          restore-keys: |
+            buildozer-global-${{ runner.os }}-
+
+      - name: Cache Buildozer local build directory
+        uses: actions/cache@v4
+        with:
+          path: .buildozer
+          key: buildozer-local-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}-${{ hashFiles('**/*.py') }}
+          restore-keys: |
+            buildozer-local-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}-
+            buildozer-local-${{ runner.os }}-
+
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            git zip unzip rsync \
-            build-essential ccache \
-            openjdk-17-jdk \
-            pkg-config \
-            autoconf automake libtool libtool-bin autoconf-archive \
-            cmake \
-            libffi-dev libssl-dev \
-            libunwind-dev \
-            libz-dev zlib1g-dev \
-            libjpeg-dev libpng-dev \
+            build-essential \
+            git \
+            python3-pip \
+            python3-venv \
+            ffmpeg \
             libsdl2-dev \
-            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
-            gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
-            gstreamer1.0-tools \
-            python3-venv
+            libsdl2-image-dev \
+            libsdl2-mixer-dev \
+            libsdl2-ttf-dev \
+            libportmidi-dev \
+            libswscale-dev \
+            libavformat-dev \
+            libavcodec-dev \
+            zlib1g-dev \
+            libgstreamer1.0-dev \
+            gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good \
+            libffi-dev \
+            libssl-dev \
+            autoconf \
+            automake \
+            cmake \
+            libtool \
+            pkg-config \
+            zip \
+            unzip \
+            openjdk-17-jdk \
+            autogen \
+            gettext \
+            libncurses5-dev \
+            libncursesw5-dev \
+            libtinfo5
 
-      - name: Install Buildozer + python-for-android
+      - name: Setup project structure
+        run: |
+          echo "Setting up project directory structure..."
+          
+          # Create engine package directory
+          mkdir -p engine
+          
+          # Move all offline_ai_*.py files to engine/ package
+          for f in offline_ai_*.py; do
+            if [ -f "$f" ]; then
+              mv "$f" engine/
+              echo "Moved $f to engine/"
+            fi
+          done
+          
+          # Move other AI-related modules to engine/
+          for f in audio_baseline.py vision_baseline.py coherence.py distillation.py \
+                   maturity.py wisdom.py feature_schemas.py companion.py onboarding.py \
+                   theme.py expressive_face.py face_personality.py; do
+            if [ -f "$f" ]; then
+              mv "$f" engine/
+              echo "Moved $f to engine/"
+            fi
+          done
+          
+          # Move utility modules to engine/
+          for f in constants.py utils.py pretrained_loader.py; do
+            if [ -f "$f" ]; then
+              mv "$f" engine/
+              echo "Moved $f to engine/"
+            fi
+          done
+          
+          # Create engine/__init__.py to make it a proper package
+          cat > engine/__init__.py << 'EOF'
+"""
+Agora AI Engine Package
+=======================
+
+Offline AI companion engine with perception, memory, expression,
+and Agora platform integration capabilities.
+"""
+
+__version__ = "0.1.0"
+
+# Core exports
+from .offline_ai_core import OfflineAI, OfflineAIFactory
+from .offline_ai_runtime import OfflineAIRuntime, create_runtime
+from .offline_ai_expression import OnboardingProfile, LanguageBootstrap
+
+__all__ = [
+    'OfflineAI',
+    'OfflineAIFactory', 
+    'OfflineAIRuntime',
+    'create_runtime',
+    'OnboardingProfile',
+    'LanguageBootstrap',
+]
+EOF
+          echo "Created engine/__init__.py"
+          
+          # Create app package structure
+          mkdir -p app/ui/screens
+          mkdir -p app/ui/components
+          
+          # Use main(1).py as app/main.py if it exists, otherwise create from template
+          if [ -f "main(1).py" ]; then
+            cp main(1).py app/main.py
+            echo "Copied main(1).py to app/main.py"
+          fi
+          
+          # Move theme.py to app/ui/components if it was moved to engine
+          if [ -f "engine/theme.py" ]; then
+            cp engine/theme.py app/ui/components/
+          fi
+          
+          # Create app/__init__.py
+          cat > app/__init__.py << 'EOF'
+"""Agora AI App Package"""
+__version__ = "0.1.0"
+EOF
+          
+          # Create app/ui/__init__.py
+          cat > app/ui/__init__.py << 'EOF'
+"""Agora AI UI Package"""
+EOF
+          
+          # Create app/ui/screens/__init__.py
+          cat > app/ui/screens/__init__.py << 'EOF'
+"""Agora AI Screen Components"""
+from .onboarding import OnboardingScreen
+from .companion import CompanionScreen
+
+__all__ = ['OnboardingScreen', 'CompanionScreen']
+EOF
+          
+          # Create app/ui/components/__init__.py
+          cat > app/ui/components/__init__.py << 'EOF'
+"""Agora AI UI Components"""
+from .theme import ThemeManager, COLOR_THEMES
+
+__all__ = ['ThemeManager', 'COLOR_THEMES']
+EOF
+          
+          # Move onboarding.py and companion.py to screens if they exist in engine
+          if [ -f "engine/onboarding.py" ]; then
+            cp engine/onboarding.py app/ui/screens/
+          fi
+          if [ -f "engine/companion.py" ]; then
+            cp engine/companion.py app/ui/screens/
+          fi
+          
+          echo "Project structure setup complete."
+          echo "Directory structure:"
+          find . -type f -name "*.py" | head -30
+
+      - name: Create buildozer.spec
+        run: |
+          cat > buildozer.spec << 'EOF'
+[app]
+title = Agora AI
+package.name = agoraai
+package.domain = com.agoraai
+source.dir = .
+source.include_exts = py,png,jpg,kv,atlas,ttf,json,txt,md,wav,mp3
+source.include_patterns = *.py,engine/*.py,app/*.py,app/ui/*.py,app/ui/screens/*.py,app/ui/components/*.py,assets/*,data/*
+source.exclude_exts = spec,log
+source.exclude_patterns = buildozer.spec,.buildozer/*,bin/*,*.pyc,__pycache__/*,.git/*
+version.regex = __version__ = ['"](.*)['"]
+version.filename = %(source.dir)s/engine/__init__.py
+
+requirements = python3,kivy==2.3.0,kivymd==1.2.0,numpy,cryptography,pillow,requests,urllib3,charset-normalizer,idna,certifi
+
+android.api = 33
+android.minapi = 21
+android.ndk = 25b
+android.ndk_api = 21
+android.sdk = 33
+android.archs = arm64-v8a,armeabi-v7a
+android.accept_sdk_license = True
+
+android.permissions = INTERNET,CAMERA,RECORD_AUDIO,MODIFY_AUDIO_SETTINGS,ACCESS_NETWORK_STATE,BLUETOOTH,BLUETOOTH_ADMIN,BLUETOOTH_SCAN,BLUETOOTH_CONNECT,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION,FOREGROUND_SERVICE,WAKE_LOCK,VIBRATE,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
+
+android.features = android.hardware.camera,android.hardware.camera.autofocus,android.hardware.bluetooth_le
+android.orientation = portrait
+android.window_softinput_mode = adjustPan
+android.fullscreen = 0
+android.wakelock = True
+
+p4a.bootstrap = sdl2
+p4a.local_recipes =
+p4a.hook =
+p4a.setup_py = False
+p4a.window = SDL
+
+[buildozer]
+log_level = 2
+warn_on_root = 1
+builddir = ./.buildozer
+bin = ./bin
+EOF
+          echo "Created buildozer.spec"
+          cat buildozer.spec
+
+      - name: Install Buildozer and dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          # Buildozer + p4a are sensitive to runner/toolchain drift; use freshest p4a
-          python -m pip install --upgrade \
-            cython==0.29.36 \
-            buildozer \
-            "python-for-android @ https://github.com/kivy/python-for-android/archive/refs/heads/master.zip"
+          pip install buildozer==1.5.0 cython==0.29.36
+          pip install -r requirements.txt || echo "No requirements.txt found or install failed"
 
-      - name: Build APK (debug)
-        env:
-          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-          ANDROID_HOME: /usr/local/lib/android/sdk
+      - name: Initialize Buildozer (if needed)
         run: |
-          buildozer -v android debug
+          # Ensure buildozer doesn't try to create a new spec
+          if [ ! -f buildozer.spec ]; then
+            echo "ERROR: buildozer.spec not found!"
+            exit 1
+          fi
+          
+          # Check buildozer version
+          buildozer --version
+          
+          # Verify spec file
+          buildozer spec 2>/dev/null || true
+
+      - name: Build Debug APK
+        run: |
+          echo "Starting debug build..."
+          export ANDROIDSDK="${HOME}/.buildozer/android/platform/android-sdk"
+          export ANDROIDNDK="${HOME}/.buildozer/android/platform/android-ndk-r25b"
+          export ANDROIDAPI="33"
+          export ANDROIDMINAPI="21"
+          
+          # Run buildozer with verbose output
+          buildozer android debug 2>&1 | tee build.log
+        env:
+          BUILDOZER_WARN_ON_ROOT: 0
+        timeout-minutes: 150
+
+      - name: Verify APK output
+        run: |
+          echo "Checking for APK files..."
+          ls -la bin/ 2>/dev/null || echo "No bin directory found"
+          find . -name "*.apk" -type f 2>/dev/null | head -10
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
+        if: success()
         with:
-          name: agoraai-apk
-          path: |
-            bin/*.apk
-            **/bin/*.apk
-          if-no-files-found: error
+          name: agora-ai-debug-apk
+          path: bin/*.apk
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-debug
+          path: build.log
+          retention-days: 7
+
+  build-release:
+    name: Build Release APK
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: build
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache Buildozer global directory
+        uses: actions/cache@v4
+        with:
+          path: ~/.buildozer
+          key: buildozer-global-release-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}-${{ env.ANDROID_NDK }}
+          restore-keys: |
+            buildozer-global-release-${{ runner.os }}-
+
+      - name: Cache Buildozer local build directory
+        uses: actions/cache@v4
+        with:
+          path: .buildozer
+          key: buildozer-local-release-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}-${{ hashFiles('**/*.py') }}
+          restore-keys: |
+            buildozer-local-release-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}-
+            buildozer-local-release-${{ runner.os }}-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            git \
+            python3-pip \
+            python3-venv \
+            ffmpeg \
+            libsdl2-dev \
+            libsdl2-image-dev \
+            libsdl2-mixer-dev \
+            libsdl2-ttf-dev \
+            libportmidi-dev \
+            libswscale-dev \
+            libavformat-dev \
+            libavcodec-dev \
+            zlib1g-dev \
+            libgstreamer1.0-dev \
+            gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good \
+            libffi-dev \
+            libssl-dev \
+            autoconf \
+            automake \
+            cmake \
+            libtool \
+            pkg-config \
+            zip \
+            unzip \
+            openjdk-17-jdk \
+            autogen \
+            gettext \
+            libncurses5-dev \
+            libncursesw5-dev \
+            libtinfo5
+
+      - name: Setup project structure
+        run: |
+          echo "Setting up project directory structure..."
+          
+          # Create engine package directory
+          mkdir -p engine
+          
+          # Move all offline_ai_*.py files to engine/ package
+          for f in offline_ai_*.py; do
+            if [ -f "$f" ]; then
+              mv "$f" engine/
+              echo "Moved $f to engine/"
+            fi
+          done
+          
+          # Move other AI-related modules to engine/
+          for f in audio_baseline.py vision_baseline.py coherence.py distillation.py \
+                   maturity.py wisdom.py feature_schemas.py companion.py onboarding.py \
+                   theme.py expressive_face.py face_personality.py; do
+            if [ -f "$f" ]; then
+              mv "$f" engine/
+              echo "Moved $f to engine/"
+            fi
+          done
+          
+          # Move utility modules to engine/
+          for f in constants.py utils.py pretrained_loader.py; do
+            if [ -f "$f" ]; then
+              mv "$f" engine/
+              echo "Moved $f to engine/"
+            fi
+          done
+          
+          # Create engine/__init__.py to make it a proper package
+          cat > engine/__init__.py << 'EOF'
+"""
+Agora AI Engine Package
+=======================
+
+Offline AI companion engine with perception, memory, expression,
+and Agora platform integration capabilities.
+"""
+
+__version__ = "0.1.0"
+
+# Core exports
+from .offline_ai_core import OfflineAI, OfflineAIFactory
+from .offline_ai_runtime import OfflineAIRuntime, create_runtime
+from .offline_ai_expression import OnboardingProfile, LanguageBootstrap
+
+__all__ = [
+    'OfflineAI',
+    'OfflineAIFactory', 
+    'OfflineAIRuntime',
+    'create_runtime',
+    'OnboardingProfile',
+    'LanguageBootstrap',
+]
+EOF
+          echo "Created engine/__init__.py"
+          
+          # Create app package structure
+          mkdir -p app/ui/screens
+          mkdir -p app/ui/components
+          
+          # Use main(1).py as app/main.py if it exists
+          if [ -f "main(1).py" ]; then
+            cp main(1).py app/main.py
+            echo "Copied main(1).py to app/main.py"
+          fi
+          
+          # Move theme.py to app/ui/components if it was moved to engine
+          if [ -f "engine/theme.py" ]; then
+            cp engine/theme.py app/ui/components/
+          fi
+          
+          # Create app/__init__.py
+          cat > app/__init__.py << 'EOF'
+"""Agora AI App Package"""
+__version__ = "0.1.0"
+EOF
+          
+          # Create app/ui/__init__.py
+          cat > app/ui/__init__.py << 'EOF'
+"""Agora AI UI Package"""
+EOF
+          
+          # Create app/ui/screens/__init__.py
+          cat > app/ui/screens/__init__.py << 'EOF'
+"""Agora AI Screen Components"""
+from .onboarding import OnboardingScreen
+from .companion import CompanionScreen
+
+__all__ = ['OnboardingScreen', 'CompanionScreen']
+EOF
+          
+          # Create app/ui/components/__init__.py
+          cat > app/ui/components/__init__.py << 'EOF'
+"""Agora AI UI Components"""
+from .theme import ThemeManager, COLOR_THEMES
+
+__all__ = ['ThemeManager', 'COLOR_THEMES']
+EOF
+          
+          # Move onboarding.py and companion.py to screens if they exist in engine
+          if [ -f "engine/onboarding.py" ]; then
+            cp engine/onboarding.py app/ui/screens/
+          fi
+          if [ -f "engine/companion.py" ]; then
+            cp engine/companion.py app/ui/screens/
+          fi
+          
+          echo "Project structure setup complete."
+
+      - name: Create buildozer.spec for release
+        run: |
+          cat > buildozer.spec << 'EOF'
+[app]
+title = Agora AI
+package.name = agoraai
+package.domain = com.agoraai
+source.dir = .
+source.include_exts = py,png,jpg,kv,atlas,ttf,json,txt,md,wav,mp3
+source.include_patterns = *.py,engine/*.py,app/*.py,app/ui/*.py,app/ui/screens/*.py,app/ui/components/*.py,assets/*,data/*
+source.exclude_exts = spec,log
+source.exclude_patterns = buildozer.spec,.buildozer/*,bin/*,*.pyc,__pycache__/*,.git/*
+version.regex = __version__ = ['"](.*)['"]
+version.filename = %(source.dir)s/engine/__init__.py
+
+requirements = python3,kivy==2.3.0,kivymd==1.2.0,numpy,cryptography,pillow,requests,urllib3,charset-normalizer,idna,certifi
+
+android.api = 33
+android.minapi = 21
+android.ndk = 25b
+android.ndk_api = 21
+android.sdk = 33
+android.archs = arm64-v8a,armeabi-v7a
+android.accept_sdk_license = True
+
+android.permissions = INTERNET,CAMERA,RECORD_AUDIO,MODIFY_AUDIO_SETTINGS,ACCESS_NETWORK_STATE,BLUETOOTH,BLUETOOTH_ADMIN,BLUETOOTH_SCAN,BLUETOOTH_CONNECT,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION,FOREGROUND_SERVICE,WAKE_LOCK,VIBRATE,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
+
+android.features = android.hardware.camera,android.hardware.camera.autofocus,android.hardware.bluetooth_le
+android.orientation = portrait
+android.window_softinput_mode = adjustPan
+android.fullscreen = 0
+android.wakelock = True
+
+p4a.bootstrap = sdl2
+p4a.local_recipes =
+p4a.hook =
+p4a.setup_py = False
+p4a.window = SDL
+
+[buildozer]
+log_level = 2
+warn_on_root = 1
+builddir = ./.buildozer
+bin = ./bin
+EOF
+          echo "Created buildozer.spec for release"
+
+      - name: Install Buildozer and dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install buildozer==1.5.0 cython==0.29.36
+          pip install -r requirements.txt || echo "No requirements.txt found or install failed"
+
+      - name: Build Release APK
+        run: |
+          echo "Starting release build..."
+          export ANDROIDSDK="${HOME}/.buildozer/android/platform/android-sdk"
+          export ANDROIDNDK="${HOME}/.buildozer/android/platform/android-ndk-r25b"
+          export ANDROIDAPI="33"
+          export ANDROIDMINAPI="21"
+          
+          # Run buildozer release build
+          buildozer android release 2>&1 | tee build-release.log
+        env:
+          BUILDOZER_WARN_ON_ROOT: 0
+        timeout-minutes: 150
+
+      - name: Verify APK output
+        run: |
+          echo "Checking for release APK files..."
+          ls -la bin/ 2>/dev/null || echo "No bin directory found"
+          find . -name "*.apk" -type f 2>/dev/null | head -10
+
+      - name: Upload Release APK artifact
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: agora-ai-release-apk
+          path: bin/*release*.apk
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-release
+          path: build-release.log
+          retention-days: 7
