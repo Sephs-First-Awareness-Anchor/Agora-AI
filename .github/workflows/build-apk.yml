@@ -69,6 +69,7 @@ jobs:
             libfreetype6-dev \
             libgl1-mesa-dev \
             libgles2-mesa-dev \
+            libunwind-dev \
             libgstreamer1.0-dev \
             gstreamer1.0-plugins-base \
             zip \
