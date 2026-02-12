@@ -45,40 +45,42 @@ jobs:
 
       - name: Install system dependencies
         run: |
-          sudo apt-get update
+         sudo apt-get update
+   
+         # Fix gstreamer dev deps explicitly
+          sudo apt-get install -y libunwind-dev
+
           sudo apt-get install -y \
-            build-essential \
-            git \
-            python3-pip \
-            ffmpeg \
-            libffi-dev \
-            libssl-dev \
-            autoconf \
-            autoconf-archive \
-            automake \
-            libtool \
-            libtool-bin \
-            m4 \
-            gettext \
-            pkg-config \
-            cmake \
-            zlib1g-dev \
-            libsqlite3-dev \
-            libjpeg-dev \
-            libpng-dev \
-            libfreetype6-dev \
-            libgl1-mesa-dev \
-            libgles2-mesa-dev \
-            libunwind-dev \
-            libgstreamer1.0-dev \
-            gstreamer1.0-plugins-base \
-            zip \
-            unzip \
-            openjdk-17-jdk \
-            libncurses5 \
-            libncurses5-dev \
-            libtinfo5 \
-            libffi8
+          build-essential \
+          git \
+          python3-pip \
+          ffmpeg \
+          libffi-dev \
+          libssl-dev \
+          autoconf \
+          autoconf-archive \
+          automake \
+          libtool \
+          libtool-bin \
+          m4 \
+          gettext \
+          pkg-config \
+          cmake \
+          zlib1g-dev \
+          libsqlite3-dev \
+          libjpeg-dev \
+          libpng-dev \
+          libfreetype6-dev \
+          libgl1-mesa-dev \
+          libgles2-mesa-dev \
+          libgstreamer1.0-dev \
+          gstreamer1.0-plugins-base \
+          zip \
+          unzip \
+          openjdk-17-jdk \
+          libncurses5 \
+          libncurses5-dev \
+          libtinfo5
 
       - name: Install Buildozer and dependencies
         run: |
