@@ -65,4 +65,3 @@ jobs:
             bin/*.apk
             **/bin/*.apk
           if-no-files-found: error
-```0
