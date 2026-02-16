@@ -14,7 +14,7 @@ from pathlib import Path
 from datetime import datetime
 
 from kivy.app import App
-from kivy.utils import platform
+from kivy.utils import platform as kivy_platform
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
 from kivy.core.window import Window
 from kivy.clock import Clock
@@ -45,7 +45,7 @@ def get_storage_path(app_instance=None):
     Args:
         app_instance: Optional KOCompanionApp instance for getting user_data_dir
     """
-    if platform == 'android':
+    if kivy_platform == 'android':
         # First try: use provided app instance's user_data_dir (safest, no permissions needed)
         if app_instance and hasattr(app_instance, 'user_data_dir'):
             if app_instance.user_data_dir:
@@ -325,7 +325,7 @@ class KOCompanionApp(App):
 
             # Initialize AI factory and create account
             # On Android, prioritize user_data_dir for internal storage (no permissions needed)
-            if platform == 'android':
+            if kivy_platform == 'android':
                 ai_data_root = self.user_data_dir or self.storage_path
             else:
                 ai_data_root = self.storage_path or self.user_data_dir
@@ -402,7 +402,7 @@ class KOCompanionApp(App):
     
     def _request_runtime_permissions(self):
         """Request permissions at runtime when AI is activated"""
-        if platform == 'android':
+        if kivy_platform == 'android':
             from android.permissions import request_permissions, Permission
             
             def on_permissions_result(permissions, grant_results):
@@ -550,7 +550,7 @@ class KOCompanionApp(App):
 
     def _get_device_id(self) -> str:
         """Get unique device identifier"""
-        if platform == 'android':
+        if kivy_platform == 'android':
             try:
                 from jnius import autoclass
                 Settings = autoclass('android.provider.Settings$Secure')
@@ -569,7 +569,7 @@ class KOCompanionApp(App):
     
     def _get_device_name(self) -> str:
         """Get human-readable device name"""
-        if platform == 'android':
+        if kivy_platform == 'android':
             try:
                 from jnius import autoclass
                 Build = autoclass('android.os.Build')
