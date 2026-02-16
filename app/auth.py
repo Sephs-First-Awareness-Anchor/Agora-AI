@@ -4,10 +4,10 @@ Agora AI Platform - Authentication & Purchase System
 =====================================================
 
 Production-ready authentication with:
-- Server-side purchase validation
-- JWT token management
+- Offline-first license validation (device-bound)
+- Online purchase validation (initial only)
 - Admin auto-unlock
-- Offline capability with token caching
+- Grace period for re-validation
 """
 
 import json
@@ -16,6 +16,7 @@ import time
 import logging
 from typing import Optional, Dict, Any
 from pathlib import Path
+from app.license_manager import LicenseManager
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,9 @@ class AgoraAuth:
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         self.auth_file = self.storage_dir / 'auth.json'
+        
+        # License manager for offline validation
+        self.license_manager = LicenseManager(storage_dir)
         
         self.current_user: Optional[Dict[str, Any]] = None
         self.auth_token: Optional[str] = None
@@ -75,6 +79,8 @@ class AgoraAuth:
         """
         Login user and return session info.
         
+        OFFLINE CAPABLE: Can restore session from license if available.
+        
         Returns:
             {
                 'success': bool,
@@ -84,7 +90,36 @@ class AgoraAuth:
                 'error': str or None
             }
         """
-        # Check admin first
+        # Check for existing valid license first (offline restore)
+        if self.license_manager.has_valid_license():
+            license_info = self.license_manager.get_license_info()
+            logger.info("[AUTH] Valid offline license found - restoring session")
+            
+            # Restore user from license
+            is_admin = license_info.get('is_admin', False) if license_info else False
+            user_id = license_info.get('user_id', 'user') if license_info else 'user'
+            
+            self.current_user = {
+                'username': user_id,
+                'display_name': user_id if not is_admin else 'Agora Admin',
+                'is_admin': is_admin,
+                'is_premium': True,
+                'user_id': user_id
+            }
+            self.auth_token = 'license_token_' + str(int(time.time()))
+            self.token_expiry = time.time() + (30 * 24 * 3600)
+            self._save_cached_auth()
+            
+            return {
+                'success': True,
+                'user': self.current_user,
+                'is_admin': is_admin,
+                'is_premium': True,
+                'error': None,
+                'restored_from_license': True
+            }
+        
+        # Check admin credentials
         if username == self.ADMIN_USERNAME:
             password_hash = hashlib.sha256(password.encode()).hexdigest()
             if password_hash == self.ADMIN_PASSWORD_HASH:
@@ -98,6 +133,12 @@ class AgoraAuth:
                 self.auth_token = 'admin_token_' + str(int(time.time()))
                 self.token_expiry = time.time() + (30 * 24 * 3600)  # 30 days
                 self._save_cached_auth()
+                
+                # Generate admin license for offline use
+                self.license_manager.generate_license(
+                    user_id='admin_001',
+                    is_admin=True
+                )
                 
                 logger.info("[AUTH] Admin login successful")
                 return {
@@ -174,26 +215,38 @@ class AgoraAuth:
         """
         Check if user has purchased the AI.
         
-        For production:
-        - Admins always have access
-        - Regular users: check server API or cached purchase record
+        OFFLINE-FIRST: Checks local license first, works without internet.
         """
-        if self.is_admin():
+        # First check local license (works offline)
+        if self.license_manager.has_valid_license():
             return True
         
-        if not self.is_logged_in():
-            return False
+        # Admins can generate license
+        if self.is_admin():
+            # Auto-generate admin license
+            self.license_manager.generate_license(
+                user_id=self.current_user.get('user_id', 'admin'),
+                is_admin=True
+            )
+            return True
         
-        # Check cached purchase status
-        # In production: API call to verify purchase
-        # return api.check_purchase(self.current_user['user_id'], 'offline_ai')
+        # Check if logged in user has online purchase (requires internet)
+        if self.is_logged_in():
+            # In production: API call to verify purchase
+            # if api.check_purchase(self.current_user['user_id'], 'offline_ai'):
+            #     # Generate offline license
+            #     self.license_manager.generate_license(
+            #         user_id=self.current_user['user_id'],
+            #         is_admin=False
+            #     )
+            #     return True
+            pass
         
-        # For now, check if user is premium
-        return self.is_premium()
+        return False
     
     def record_purchase(self, product_id: str, receipt: str = None) -> bool:
         """
-        Record a purchase.
+        Record a purchase and generate offline license.
         
         For production, this validates the receipt with:
         - Google Play (Android)
@@ -204,15 +257,21 @@ class AgoraAuth:
             logger.error("[AUTH] Cannot record purchase: not logged in")
             return False
         
-        # Update user status
         if product_id == 'offline_ai':
+            # Update user status
             self.current_user['is_premium'] = True
             self._save_cached_auth()
             
-            # In production: notify server
-            # api.record_purchase(self.current_user['user_id'], product_id, receipt)
+            # Generate offline license (device-bound)
+            user_id = self.current_user.get('user_id', 'unknown')
+            is_admin = self.current_user.get('is_admin', False)
             
-            logger.info(f"[AUTH] Purchase recorded: {product_id}")
+            self.license_manager.generate_license(
+                user_id=user_id,
+                is_admin=is_admin
+            )
+            
+            logger.info(f"[AUTH] Purchase recorded and license generated: {product_id}")
             return True
         
         return False

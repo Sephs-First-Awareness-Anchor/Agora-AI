@@ -278,3 +278,23 @@ class LoginScreen(Screen):
         """Show error message"""
         self.status_label.text = message
         self.status_message = message
+
+    def on_enter(self, *args):
+        """Called when screen is shown - check for existing license"""
+        # Clear inputs
+        self.username_input.text = ''
+        self.password_input.text = ''
+        self.status_label.text = ''
+        
+        # Check if we can auto-login with existing license
+        app = App.get_running_app()
+        if app.auth and app.auth.license_manager.has_valid_license():
+            # Auto-login with license (offline)
+            result = app.auth.login('', '')  # Empty credentials triggers license check
+            if result.get('success') and result.get('restored_from_license'):
+                print("[LOGIN] Auto-restored from license")
+                app.is_logged_in = True
+                app.is_ai_purchased = True
+                app.current_user = result['user']
+                app.screen_manager.current = 'platform_home'
+                return

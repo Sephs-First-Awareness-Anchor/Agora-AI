@@ -253,12 +253,28 @@ class KOCompanionApp(App):
         # Initialize authentication system
         if self._storage_initialized:
             self.auth = AgoraAuth(str(self.storage_path))
-            # Check if user is already logged in
-            if self.auth.is_logged_in():
+            
+            # Check for offline license FIRST (works without internet)
+            has_license = self.auth.license_manager.has_valid_license()
+            
+            if has_license:
+                # Valid license exists - restore session automatically
+                self.is_ai_purchased = True
+                license_info = self.auth.license_manager.get_license_info()
+                if license_info:
+                    self.current_user = {
+                        'username': license_info.get('user_id', 'user'),
+                        'display_name': license_info.get('user_id', 'User'),
+                        'is_admin': license_info.get('is_admin', False)
+                    }
+                    self.is_logged_in = True
+                    logger.info(f"[APP] Valid offline license found for: {self.current_user['display_name']}")
+            elif self.auth.is_logged_in():
+                # No license but has auth session
                 self.current_user = self.auth.current_user
                 self.is_logged_in = True
                 self.is_ai_purchased = self.auth.check_ai_purchase()
-                logger.info(f"[APP] Restored session for: {self.auth.get_display_name()}")
+                logger.info(f"[APP] Restored auth session for: {self.auth.get_display_name()}")
 
         # Load existing config if storage is ready
         if self._storage_initialized:
@@ -284,13 +300,14 @@ class KOCompanionApp(App):
         self.screen_manager.add_widget(self.onboarding_screen)
         self.screen_manager.add_widget(self.companion_screen)
 
-        # Start at Login if not authenticated, otherwise Platform Home
-        if self.is_logged_in:
+        # Start at Platform Home if has license, otherwise Login
+        # OFFLINE-FIRST: License check works without internet
+        if self.is_ai_purchased and self.is_logged_in:
             self.screen_manager.current = 'platform_home'
-            logger.info("[APP] Starting at Platform Home (authenticated)")
+            logger.info("[APP] Starting at Platform Home (license validated)")
         else:
             self.screen_manager.current = 'login'
-            logger.info("[APP] Starting at Login (authentication required)")
+            logger.info("[APP] Starting at Login (no valid license found)")
 
         # Wired evolution system disabled for working APK
 
