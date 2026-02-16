@@ -384,6 +384,13 @@ class KOCompanionApp(App):
             logger.error(f"[APP] Critical failure during onboarding completion: {e}", exc_info=True)
             self._show_error_popup(f"Failed to complete onboarding: {str(e)}")
 
+    def _get_safe_window_width(self):
+        """Get window width safely for Android"""
+        try:
+            return Window.width if Window.width > 0 else 1080
+        except:
+            return 1080
+    
     def _show_error_popup(self, message: str, title: str = "Error"):
         """Show a general error popup"""
         from kivy.uix.popup import Popup
@@ -394,7 +401,7 @@ class KOCompanionApp(App):
         content = BoxLayout(orientation='vertical', padding=20, spacing=15)
         content.add_widget(Label(
             text=message,
-            text_size=(Window.width * 0.7, None),
+            text_size=(self._get_safe_window_width() * 0.7, None),
             halign='center',
             valign='middle'
         ))
@@ -494,7 +501,7 @@ class KOCompanionApp(App):
         content = BoxLayout(orientation='vertical', padding=20, spacing=15)
         content.add_widget(Label(
             text=message,
-            text_size=(Window.width * 0.7, None),
+            text_size=(self._get_safe_window_width() * 0.7, None),
             halign='center',
             valign='middle'
         ))

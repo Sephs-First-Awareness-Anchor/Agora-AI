@@ -83,8 +83,13 @@ class SpeechBubbleWidget(Widget):
         # Resize based on text
         self.label.texture_update()
         if self.label.texture:
+            # CRITICAL: Use safe Window.width access for Android
+            try:
+                win_width = Window.width if Window.width > 0 else 1080
+            except:
+                win_width = 1080
             self.size = (
-                min(Window.width * 0.8, self.label.texture_size[0] + 30),
+                min(win_width * 0.8, self.label.texture_size[0] + 30),
                 self.label.texture_size[1] + 20
             )
         self._update()
