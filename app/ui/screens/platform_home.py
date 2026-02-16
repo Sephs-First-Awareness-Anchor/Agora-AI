@@ -14,7 +14,6 @@ from kivy.uix.button import Button
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, RoundedRectangle, Ellipse, Line
-from kivy.graphics.vertex_instructions import Bezier
 from kivy.properties import StringProperty, NumericProperty, BooleanProperty, ListProperty
 from kivy.metrics import dp
 from kivy.app import App
@@ -34,9 +33,13 @@ class AnimatedButton(Button):
         self.color = (1, 1, 1, 1)
         self.bold = True
         self.font_size = dp(16)
+        Clock.schedule_once(self._init_canvas, 0)
+    
+    def _init_canvas(self, dt):
         self.bind(pos=self._update_canvas, size=self._update_canvas)
         self.bind(on_press=self._on_press)
         self.bind(on_release=self._on_release)
+        self._update_canvas()
     
     def _update_canvas(self, *args):
         self.canvas.before.clear()
@@ -57,33 +60,6 @@ class AnimatedButton(Button):
         anim.start(self)
 
 
-class GlassCard(BoxLayout):
-    """Glassmorphism card widget"""
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.bind(pos=self._update_canvas, size=self._update_canvas)
-    
-    def _update_canvas(self, instance, value):
-        instance.canvas.before.clear()
-        with instance.canvas.before:
-            # Frosted glass effect
-            Color(1, 1, 1, 0.08)
-            RoundedRectangle(
-                pos=instance.pos,
-                size=instance.size,
-                radius=[dp(24)]
-            )
-            # Glow border
-            Color(0.5, 0.7, 1, 0.15)
-            Line(
-                rounded_rectangle=(
-                    instance.x, instance.y,
-                    instance.width, instance.height, dp(24)
-                ),
-                width=dp(1)
-            )
-
-
 class PlatformHomeScreen(Screen):
     """Modern creative home screen"""
     
@@ -93,9 +69,10 @@ class PlatformHomeScreen(Screen):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._build_ui()
+        # CRITICAL: Delay UI build to prevent canvas initialization crashes
+        Clock.schedule_once(self._build_ui, 0)
     
-    def _build_ui(self):
+    def _build_ui(self, *args):
         self.clear_widgets()
         
         # Root with animated background
@@ -103,11 +80,9 @@ class PlatformHomeScreen(Screen):
         
         # Abstract gradient background
         with root.canvas.before:
-            # Deep space base
             Color(0.015, 0.015, 0.06, 1)
             self.bg_rect = RoundedRectangle(pos=root.pos, size=root.size)
             
-            # Gradient orbs for depth
             Color(0.25, 0.1, 0.4, 0.25)
             self.orb1 = Ellipse(pos=(dp(-50), dp(500)), size=(dp(350), dp(350)))
             
@@ -158,7 +133,7 @@ class PlatformHomeScreen(Screen):
         header.add_widget(header_content)
         content.add_widget(header)
         
-        # AI Status Card - The star of the show
+        # AI Status Card
         status_card = self._create_glass_container(dp(240))
         status_content = BoxLayout(
             orientation='vertical',
@@ -166,18 +141,16 @@ class PlatformHomeScreen(Screen):
             spacing=dp(10)
         )
         
-        # Status indicator with pulse
         status_box = BoxLayout(
             size_hint_y=None,
             height=dp(40),
             padding=[dp(20), 0]
         )
         
-        # Status dot
         status_color = (0.3, 0.9, 0.5, 1) if self.is_ai_purchased else (0.9, 0.5, 0.3, 1)
         with status_box.canvas.before:
             Color(*status_color)
-            self.status_dot = Ellipse(pos=(0, 0), size=(dp(12), dp(12)))
+            Ellipse(pos=(0, dp(8)), size=(dp(12), dp(12)))
         
         self.status_label = Label(
             text='ACTIVE' if self.is_ai_purchased else 'LOCKED',
@@ -190,7 +163,6 @@ class PlatformHomeScreen(Screen):
         
         status_content.add_widget(status_box)
         
-        # Big AI name
         status_content.add_widget(Label(
             text='AI Companion',
             font_size=dp(32),
@@ -258,7 +230,6 @@ class PlatformHomeScreen(Screen):
             grid.add_widget(self._create_action_card(title, subtitle, color))
         
         content.add_widget(grid)
-        
         content.add_widget(Widget(size_hint_y=0.1))
         
         scroll.add_widget(content)
@@ -304,11 +275,6 @@ class PlatformHomeScreen(Screen):
                 size=card.size,
                 radius=[dp(20)]
             )
-            Color(*color[:3], 0.3)
-            Line(
-                rounded_rectangle=(0, 0, 100, 100, dp(20)),
-                width=dp(1.5)
-            )
         
         card.bind(pos=self._update_card, size=self._update_card)
         
@@ -336,8 +302,9 @@ class PlatformHomeScreen(Screen):
         return card
     
     def _update_bg(self, instance, value):
-        self.bg_rect.pos = instance.pos
-        self.bg_rect.size = instance.size
+        if hasattr(self, 'bg_rect'):
+            self.bg_rect.pos = instance.pos
+            self.bg_rect.size = instance.size
     
     def _update_glass(self, instance, value):
         instance.canvas.before.clear()
@@ -379,5 +346,5 @@ class PlatformHomeScreen(Screen):
             self.public_handle = app.current_user.get('display_name', 'User')
         self.is_ai_purchased = getattr(app, 'is_ai_purchased', False)
         
-        self.handle_display.text = f'Welcome, {self.public_handle}'
-        self._build_ui()
+        # Rebuild UI to update state
+        Clock.schedule_once(self._build_ui, 0)

@@ -14,6 +14,7 @@ from kivy.uix.widget import Widget
 from kivy.graphics import Color, RoundedRectangle, Ellipse, Line
 from kivy.metrics import dp
 from kivy.app import App
+from kivy.clock import Clock
 
 
 class PurchaseScreen(Screen):
@@ -21,9 +22,10 @@ class PurchaseScreen(Screen):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._build_ui()
+        # CRITICAL: Delay UI build to prevent canvas initialization crashes
+        Clock.schedule_once(self._build_ui, 0)
     
-    def _build_ui(self):
+    def _build_ui(self, *args):
         self.clear_widgets()
         
         root = FloatLayout()
@@ -110,7 +112,6 @@ class PurchaseScreen(Screen):
                 height=dp(35)
             )
             
-            # Checkmark
             with row.canvas.before:
                 Color(0.3, 0.9, 0.5, 1)
                 RoundedRectangle(
@@ -194,8 +195,9 @@ class PurchaseScreen(Screen):
         self.add_widget(root)
     
     def _update_bg(self, instance, value):
-        self.bg.pos = instance.pos
-        self.bg.size = instance.size
+        if hasattr(self, 'bg'):
+            self.bg.pos = instance.pos
+            self.bg.size = instance.size
     
     def _update_features(self, instance, value):
         instance.canvas.before.clear()

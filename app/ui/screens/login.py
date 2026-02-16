@@ -18,9 +18,9 @@ from kivy.graphics.vertex_instructions import Line
 from kivy.properties import StringProperty, ListProperty
 from kivy.metrics import dp
 from kivy.app import App
+from kivy.clock import Clock
 import hashlib
 import json
-import math
 
 
 class ModernTextInput(TextInput):
@@ -51,12 +51,16 @@ class GradientButton(Button):
         self.color = (1, 1, 1, 1)
         self.bold = True
         self.font_size = dp(16)
+        # CRITICAL: Schedule canvas update after initialization
+        Clock.schedule_once(self._init_canvas, 0)
+    
+    def _init_canvas(self, dt):
         self.bind(pos=self._update_canvas, size=self._update_canvas)
+        self._update_canvas()
     
     def _update_canvas(self, *args):
         self.canvas.before.clear()
         with self.canvas.before:
-            # Gradient background
             Color(*self.gradient_colors[0])
             self.rect = RoundedRectangle(
                 pos=self.pos, 
@@ -74,15 +78,16 @@ class LoginScreen(Screen):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._build_ui()
+        # CRITICAL: Schedule UI build to avoid canvas issues during init
+        Clock.schedule_once(self._build_ui, 0)
     
-    def _build_ui(self):
+    def _build_ui(self, *args):
         self.clear_widgets()
         
         # Root with animated gradient background
         root = FloatLayout()
         
-        # Animated gradient background
+        # Abstract gradient background - use bind properly
         with root.canvas.before:
             # Deep space gradient
             Color(0.02, 0.02, 0.08, 1)
@@ -109,9 +114,10 @@ class LoginScreen(Screen):
             size_hint=(0.9, 0.85)
         )
         
-        # Logo area with glow effect
+        # Spacer
         content.add_widget(Widget(size_hint_y=0.05))
         
+        # Logo area with glow effect
         logo_container = BoxLayout(
             orientation='vertical',
             size_hint_y=None,
@@ -119,38 +125,24 @@ class LoginScreen(Screen):
             padding=dp(10)
         )
         
-        # Glowing logo background
-        with logo_container.canvas.before:
-            Color(0.2, 0.4, 0.9, 0.1)
-            RoundedRectangle(
-                pos=(0, 0),
-                size=(dp(200), dp(80)),
-                radius=[dp(20)]
-            )
-        
         logo_container.add_widget(Label(
             text='AGORA',
             font_size=dp(42),
             bold=True,
-            color=(1, 1, 1, 1),
-            font_name='Roboto'  # Modern font
+            color=(1, 1, 1, 1)
         ))
         
         logo_container.add_widget(Label(
             text='AI PLATFORM',
             font_size=dp(14),
             color=(0.4, 0.8, 1, 0.9),
-            bold=True,
-            letter_spacing=dp(4)
+            bold=True
         ))
         
         content.add_widget(logo_container)
         content.add_widget(Widget(size_hint_y=0.03))
         
-        # Glassmorphism card
-        card = self._create_glass_card()
-        
-        # Mode toggle
+        # Mode Toggle
         toggle_box = BoxLayout(
             size_hint_y=None,
             height=dp(50),
@@ -182,9 +174,12 @@ class LoginScreen(Screen):
         
         toggle_box.add_widget(self.login_btn)
         toggle_box.add_widget(self.signup_btn)
-        card.add_widget(toggle_box)
+        content.add_widget(toggle_box)
         
-        card.add_widget(Widget(size_hint_y=0.03))
+        content.add_widget(Widget(size_hint_y=0.03))
+        
+        # Form Card
+        card = self._create_glass_card()
         
         # Form fields
         self.user_input = ModernTextInput(
@@ -203,7 +198,7 @@ class LoginScreen(Screen):
         self.pass_input.bind(on_text_validate=self._do_action)
         card.add_widget(self._create_input_container('PASSWORD', self.pass_input))
         
-        # Confirm password for signup
+        # Confirm Password (signup only)
         self.confirm_container = BoxLayout(
             orientation='vertical',
             size_hint_y=None,
@@ -233,7 +228,7 @@ class LoginScreen(Screen):
         
         card.add_widget(Widget(size_hint_y=0.02))
         
-        # Action button with gradient
+        # Action button
         self.action_btn = GradientButton(
             text='SIGN IN',
             size_hint_y=None,
@@ -269,18 +264,15 @@ class LoginScreen(Screen):
         )
         
         with card.canvas.before:
-            # Glass effect - semi-transparent white
             Color(1, 1, 1, 0.05)
             self.glass_rect = RoundedRectangle(
                 pos=card.pos,
                 size=card.size,
                 radius=[dp(30)]
             )
-            
-            # Border glow
             Color(0.4, 0.6, 1, 0.1)
             Line(
-                rounded_rectangle=(card.x, card.y, card.width, card.height, dp(30)),
+                rounded_rectangle=(0, 0, 100, 100, dp(30)),
                 width=dp(1.5)
             )
         
@@ -311,8 +303,9 @@ class LoginScreen(Screen):
         return container
     
     def _update_bg(self, instance, value):
-        self.bg_rect.pos = instance.pos
-        self.bg_rect.size = instance.size
+        if hasattr(self, 'bg_rect'):
+            self.bg_rect.pos = instance.pos
+            self.bg_rect.size = instance.size
     
     def _update_glass(self, instance, value):
         instance.canvas.before.clear()
@@ -361,7 +354,7 @@ class LoginScreen(Screen):
         password = self.pass_input.text.strip()
         
         if not username or not password:
-            self.error_label.text = 'Please fill in all fields'
+            self.error_label.text = 'Please enter username and password'
             return
         
         app = App.get_running_app()
@@ -376,7 +369,9 @@ class LoginScreen(Screen):
             self._do_signup(app, username, password)
     
     def _do_login(self, app, username, password):
+        # Check admin login FIRST
         if username == self.ADMIN_USER and password == self.ADMIN_PASS:
+            print(f"[LOGIN] Admin login successful")
             app.current_user = {
                 'username': 'admin',
                 'user_id': 'admin_001',
@@ -407,6 +402,7 @@ class LoginScreen(Screen):
         if username in users:
             stored_hash = users[username].get('password_hash', '')
             if hashlib.sha256(password.encode()).hexdigest() == stored_hash:
+                print(f"[LOGIN] User login: {username}")
                 app.current_user = {
                     'username': username,
                     'user_id': users[username].get('user_id', username),
@@ -420,7 +416,7 @@ class LoginScreen(Screen):
                 app.screen_manager.current = 'platform_home'
                 return
         
-        self.error_label.text = 'Invalid credentials'
+        self.error_label.text = 'Invalid username or password'
     
     def _do_signup(self, app, username, password):
         users_file = app.storage_path / 'users.json' if app.storage_path else None
@@ -436,6 +432,7 @@ class LoginScreen(Screen):
             self.error_label.text = 'Username already exists'
             return
         
+        # Create user
         user_id = f"usr_{hashlib.md5(username.encode()).hexdigest()[:8]}"
         users[username] = {
             'user_id': user_id,
@@ -450,6 +447,7 @@ class LoginScreen(Screen):
             except:
                 pass
         
+        print(f"[LOGIN] New user: {username}")
         app.current_user = {
             'username': username,
             'user_id': user_id,
@@ -463,13 +461,18 @@ class LoginScreen(Screen):
         app.screen_manager.current = 'platform_home'
     
     def on_enter(self, *args):
-        self.user_input.text = ''
-        self.pass_input.text = ''
-        self.confirm_input.text = ''
-        self.error_label.text = ''
+        # Schedule clear to avoid canvas issues
+        Clock.schedule_once(self._clear_inputs, 0.1)
         
+        # Auto-login if has license
         app = App.get_running_app()
         if app.auth and app.auth.license_manager.has_valid_license():
             app.is_logged_in = True
             app.is_ai_purchased = True
             app.screen_manager.current = 'platform_home'
+    
+    def _clear_inputs(self, dt):
+        self.user_input.text = ''
+        self.pass_input.text = ''
+        self.confirm_input.text = ''
+        self.error_label.text = ''
