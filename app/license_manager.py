@@ -4,7 +4,7 @@ Agora AI Platform - Offline License Manager
 ============================================
 
 Offline-first license validation system:
-- License bound to device fingerprint
+- License bound to device (ANDROID-FRIENDLY, no sensitive IDs)
 - Encrypted local storage
 - Works 100% offline after initial activation
 - Grace period for re-validation
@@ -19,6 +19,7 @@ import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
+from app.android_device import AndroidFriendlyDevice
 
 logger = logging.getLogger(__name__)
 
@@ -43,58 +44,21 @@ class LicenseManager:
         self.license_file = self.storage_dir / 'ai_license.enc'
         self.meta_file = self.storage_dir / 'license_meta.json'
         
+        # Android-friendly device identification (no sensitive IDs)
+        self._device_helper = AndroidFriendlyDevice(storage_dir)
         self._device_id = None
         self._cached_license = None
     
     def _get_device_fingerprint(self) -> str:
         """
-        Generate unique device fingerprint.
-        Combines multiple device identifiers for binding.
+        Get device fingerprint using Android-friendly method.
+        AVOIDS: ANDROID_ID, MAC address, IMEI (flagged as sensitive)
         """
         if self._device_id:
             return self._device_id
         
-        import os
-        import sys
-        
-        components = []
-        
-        # Try to get Android ID
-        try:
-            from jnius import autoclass
-            Settings = autoclass('android.provider.Settings$Secure')
-            Context = autoclass('android.content.Context')
-            PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            android_id = Settings.getString(
-                PythonActivity.mActivity.getContentResolver(),
-                Settings.ANDROID_ID
-            )
-            components.append(android_id)
-        except:
-            pass
-        
-        # Machine identifier
-        try:
-            import uuid
-            components.append(str(uuid.getnode()))  # MAC address
-        except:
-            pass
-        
-        # Fallback identifiers
-        components.extend([
-            os.environ.get('ANDROID_ARGUMENT', ''),
-            sys.platform,
-            str(os.getuid()) if hasattr(os, 'getuid') else '',
-        ])
-        
-        # Create hash
-        fingerprint = hashlib.sha256(
-            '|'.join(filter(None, components)).encode()
-        ).hexdigest()[:32]
-        
-        self._device_id = fingerprint
-        logger.info(f"[LICENSE] Device fingerprint: {fingerprint[:8]}...")
-        return fingerprint
+        self._device_id = self._device_helper.get_device_id()
+        return self._device_id
     
     def _derive_key(self, device_id: str) -> bytes:
         """Derive encryption key from device fingerprint"""

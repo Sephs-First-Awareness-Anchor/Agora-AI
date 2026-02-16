@@ -150,7 +150,8 @@ android.archs = arm64-v8a,armeabi-v7a
 #android.numeric_version = 1
 
 # (bool) enables Android auto backup feature (Android API >=23)
-android.allow_backup = True
+# SECURITY: Disabled to prevent sensitive data (licenses, entities) from cloud backup
+android.allow_backup = False
 
 # (str) XML file for custom backup rules (see official auto backup rules documentation)
 #android.backup_rules =
@@ -237,3 +238,19 @@ warn_on_root = 1
 
 # (str) Path to build output (i.e. .apk, .aab, .ipa) storage
 # bin_dir = ./bin
+
+# SECURITY: Android-friendly configuration
+# Prevent "harmful app" warnings
+
+# Don't request legacy external storage (Android 10+ compliance)
+android.request_legacy_external_storage = False
+
+# Enable AndroidX (modern Android support)
+android.enable_androidx = True
+
+# Target SDK version (compliance)
+android.api = 33
+
+# Don't use broad permissions
+android.wakelock = False
+

@@ -9,6 +9,9 @@ Manages AI entity identity across devices:
 - Device binding prevents duplicate active instances
 - Transfer system for moving AI between devices
 - Optional: Multi-device sync through platform
+
+ANDROID-FRIENDLY: Uses privacy-compliant device identification
+(no ANDROID_ID, MAC address, or sensitive system APIs)
 """
 
 import json
@@ -19,6 +22,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 from enum import Enum
+from app.android_device import AndroidFriendlyDevice
 
 logger = logging.getLogger(__name__)
 
@@ -268,70 +272,20 @@ class EntityManager:
         self.entity_file = self.storage_dir / 'entity_identity.json'
         
         self.current_entity: Optional[EntityIdentity] = None
-        self._device_fingerprint: Optional[str] = None
-        self._device_name: str = "Unknown Device"
+        
+        # Android-friendly device identification
+        self._device_helper = AndroidFriendlyDevice(storage_dir)
         
         # Load existing entity
         self._load_entity()
     
     def _get_device_fingerprint(self) -> str:
-        """Generate device fingerprint"""
-        if self._device_fingerprint:
-            return self._device_fingerprint
-        
-        import os
-        import sys
-        
-        components = []
-        
-        # Android ID
-        try:
-            from jnius import autoclass
-            Settings = autoclass('android.provider.Settings$Secure')
-            Context = autoclass('android.content.Context')
-            PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            android_id = Settings.getString(
-                PythonActivity.mActivity.getContentResolver(),
-                Settings.ANDROID_ID
-            )
-            components.append(android_id)
-        except:
-            pass
-        
-        # MAC address
-        try:
-            import uuid
-            components.append(str(uuid.getnode()))
-        except:
-            pass
-        
-        # Other identifiers
-        components.extend([
-            os.environ.get('ANDROID_ARGUMENT', ''),
-            sys.platform,
-        ])
-        
-        fingerprint = hashlib.sha256(
-            '|'.join(filter(None, components)).encode()
-        ).hexdigest()[:32]
-        
-        self._device_fingerprint = fingerprint
-        return fingerprint
+        """Get device fingerprint (Android-friendly, no sensitive IDs)"""
+        return self._device_helper.get_device_id()
     
     def _get_device_name(self) -> str:
-        """Get device name"""
-        if self._device_name != "Unknown Device":
-            return self._device_name
-        
-        try:
-            from jnius import autoclass
-            Build = autoclass('android.os.Build')
-            self._device_name = f"{Build.MANUFACTURER} {Build.MODEL}"
-        except:
-            import platform
-            self._device_name = f"{platform.system()} {platform.machine()}"
-        
-        return self._device_name
+        """Get device name (Android-friendly)"""
+        return self._device_helper.get_device_name()
     
     def _load_entity(self):
         """Load existing entity from storage"""
