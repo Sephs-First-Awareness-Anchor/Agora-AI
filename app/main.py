@@ -23,6 +23,8 @@ from kivy.properties import ObjectProperty, StringProperty, BooleanProperty
 from app.ui.components.theme import ThemeManager, COLOR_THEMES
 from app.ui.screens.onboarding import OnboardingScreen
 from app.ui.screens.companion import CompanionScreen
+from app.ui.screens.platform_home import PlatformHomeScreen
+from app.ui.screens.purchase import PurchaseScreen
 
 # Import core AI modules
 from engine.offline_ai_core import OfflineAIFactory, OfflineAI
@@ -105,6 +107,7 @@ class KOCompanionApp(App):
     
     # State flags
     is_onboarded = BooleanProperty(False)
+    is_ai_purchased = BooleanProperty(True)  # Default True for testing - Platform purchase status
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -251,21 +254,20 @@ class KOCompanionApp(App):
         # Create screen manager
         self.screen_manager = ScreenManager(transition=FadeTransition(duration=0.3))
 
-        # Add screens
+        # Add screens - Platform first, then AI
+        self.platform_home_screen = PlatformHomeScreen(name='platform_home')
+        self.purchase_screen = PurchaseScreen(name='purchase')
         self.onboarding_screen = OnboardingScreen(name='onboarding')
         self.companion_screen = CompanionScreen(name='companion')
 
+        self.screen_manager.add_widget(self.platform_home_screen)
+        self.screen_manager.add_widget(self.purchase_screen)
         self.screen_manager.add_widget(self.onboarding_screen)
         self.screen_manager.add_widget(self.companion_screen)
 
-        # Determine starting screen
-        if self.is_onboarded and self.serial_code:
-            # Returning user - go straight to companion
-            # Activation happens via CompanionScreen.on_enter (no Clock timers)
-            self.screen_manager.current = 'companion'
-        else:
-            # New user - show onboarding
-            self.screen_manager.current = 'onboarding'
+        # ALWAYS start at Platform Home - this is the Agora AI Platform hub
+        self.screen_manager.current = 'platform_home'
+        logger.info("[APP] Starting at Platform Home (Agora AI hub)")
 
         # Wired evolution system disabled for working APK
 
@@ -290,8 +292,9 @@ class KOCompanionApp(App):
                 self.birthday = config.get('birthday', '')
                 self.serial_code = config.get('serial_code', '')
                 self.is_onboarded = config.get('is_onboarded', False)
+                self.is_ai_purchased = config.get('is_ai_purchased', True)  # Default True for testing
 
-                logger.info(f"[APP] Loaded config: user={self.user_name}, is_onboarded={self.is_onboarded}")
+                logger.info(f"[APP] Loaded config: user={self.user_name}, is_onboarded={self.is_onboarded}, purchased={self.is_ai_purchased}")
             except Exception as e:
                 logger.error(f"[APP] Failed to load config: {e}")
         else:
@@ -311,6 +314,7 @@ class KOCompanionApp(App):
             'birthday': self.birthday,
             'serial_code': self.serial_code,
             'is_onboarded': self.is_onboarded,
+            'is_ai_purchased': self.is_ai_purchased,
             'last_accessed': datetime.now().isoformat()
         }
 
@@ -323,6 +327,10 @@ class KOCompanionApp(App):
             logger.info(f"[APP] Config saved successfully (is_onboarded={self.is_onboarded})")
         except Exception as e:
             logger.error(f"[APP] Failed to save config to {self.config_path}: {e}")
+    
+    def save_config(self):
+        """Public method to save config (called from screens)"""
+        self._save_config()
     
     def complete_onboarding(self, user_name: str, ai_name: str,
                            favorite_color: str, mode: str, birthday: str):
