@@ -8,8 +8,11 @@ on:
   workflow_dispatch:
 
 env:
-  # Buildozer/p4a is generally happier in CI on 3.10 than 3.11
   PYTHON_VERSION: "3.10"
+  ANDROID_API: "33"
+  ANDROID_MINAPI: "21"
+  ANDROID_NDK: "25b"
+  ANDROID_SDK: "33"
 
 jobs:
   build:
@@ -36,7 +39,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.buildozer
-          key: buildozer-global-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}
+          key: buildozer-global-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}-${{ env.ANDROID_NDK }}
           restore-keys: |
             buildozer-global-${{ runner.os }}-
 
@@ -67,6 +70,7 @@ jobs:
             libavformat-dev \
             libavcodec-dev \
             zlib1g-dev \
+            libunwind-dev \
             libgstreamer1.0-dev \
             gstreamer1.0-plugins-base \
             gstreamer1.0-plugins-good \
@@ -79,34 +83,20 @@ jobs:
             pkg-config \
             zip \
             unzip \
+            openjdk-17-jdk \
             autogen \
             gettext \
             libncurses5-dev \
             libncursesw5-dev \
             libtinfo5
 
-      - name: Preflight + create build log
-        if: always()
-        run: |
-          set -euxo pipefail
-          echo "=== Preflight ===" | tee build.log
-          date | tee -a build.log
-          uname -a | tee -a build.log
-          python --version | tee -a build.log
-          java -version 2>&1 | tee -a build.log
-          echo "Repo root contents:" | tee -a build.log
-          ls -la | tee -a build.log
-
-      - name: Install Buildozer and Python deps
+      - name: Install Buildozer and dependencies
         run: |
           set -euxo pipefail
           python -m pip install --upgrade pip setuptools wheel
-          pip install "buildozer==1.5.0" "cython==0.29.36"
-          # Install repo requirements if present (don’t hide failures)
+          pip install buildozer==1.5.0 cython==0.29.36
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
-          else
-            echo "No requirements.txt present"
           fi
 
       - name: Verify buildozer.spec exists
@@ -119,34 +109,29 @@ jobs:
           buildozer --version
 
       - name: Build Debug APK (always logs)
-        env:
-          BUILDOZER_WARN_ON_ROOT: "0"
-        timeout-minutes: 150
         run: |
           set -euxo pipefail
-          echo "=== Starting buildozer android debug ===" | tee -a build.log
-          # Important: do NOT hardcode ANDROIDSDK/ANDROIDNDK paths in CI.
-          # Buildozer/p4a manages these under ~/.buildozer and .buildozer.
-          buildozer -v android debug 2>&1 | tee -a build.log
+          echo "Starting debug build..." | tee build.log
+          # Let Buildozer manage SDK/NDK paths; hardcoding is fragile on CI
+          buildozer android debug 2>&1 | tee -a build.log
+        env:
+          BUILDOZER_WARN_ON_ROOT: 0
+        timeout-minutes: 150
 
       - name: Verify APK output
         if: always()
         run: |
           set -euxo pipefail
-          echo "=== APK output check ===" | tee -a build.log
-          echo "bin/ contents:" | tee -a build.log
+          echo "Checking for APK files..." | tee -a build.log
           ls -la bin/ 2>/dev/null | tee -a build.log || echo "No bin directory found" | tee -a build.log
-          echo "First 20 APKs found:" | tee -a build.log
-          find . -name "*.apk" -type f 2>/dev/null | head -20 | tee -a build.log
+          find . -name "*.apk" -type f 2>/dev/null | head -10 | tee -a build.log
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         if: success()
         with:
           name: agora-ai-debug-apk
-          path: |
-            bin/*.apk
-            **/*.apk
+          path: bin/*.apk
           retention-days: 30
           if-no-files-found: warn
 
