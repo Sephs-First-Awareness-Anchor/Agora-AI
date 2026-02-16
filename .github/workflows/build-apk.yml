@@ -10,8 +10,9 @@ on:
 env:
   PYTHON_VERSION: "3.10"
   ANDROID_API: "33"
-  ANDROID_MINAPI: "21"
+  ANDROID_MINAPI: "26"
   ANDROID_NDK: "25b"
+  ANDROID_NDK_API: "26"
   ANDROID_SDK: "33"
 
 jobs:
@@ -107,6 +108,8 @@ jobs:
             exit 1
           fi
           buildozer --version
+          # Display key settings
+          grep -E "^android\.(api|minapi|ndk)" buildozer.spec || true
 
       - name: Build Debug APK (always logs)
         run: |
