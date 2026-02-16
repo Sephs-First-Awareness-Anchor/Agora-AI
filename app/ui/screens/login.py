@@ -1,30 +1,74 @@
 #!/usr/bin/env python3
 """
-Agora AI Platform - Login Screen
-=================================
+Agora AI Platform - Modern Login Screen
+=======================================
+Creative, abstract, classy design with gradients and glassmorphism.
 """
 
 from kivy.uix.screenmanager import Screen
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.label import Label
 from kivy.uix.button import Button
 from kivy.uix.textinput import TextInput
 from kivy.uix.togglebutton import ToggleButton
 from kivy.uix.widget import Widget
-from kivy.graphics import Color, RoundedRectangle
-from kivy.properties import StringProperty
+from kivy.graphics import Color, RoundedRectangle, Rectangle, Ellipse
+from kivy.graphics.vertex_instructions import Line
+from kivy.properties import StringProperty, ListProperty
 from kivy.metrics import dp
 from kivy.app import App
 import hashlib
 import json
+import math
+
+
+class ModernTextInput(TextInput):
+    """Custom styled text input"""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.background_normal = ''
+        self.background_active = ''
+        self.background_disabled = ''
+        self.background_color = (0.1, 0.1, 0.15, 0.6)
+        self.cursor_color = (0.4, 0.8, 1, 1)
+        self.foreground_color = (1, 1, 1, 1)
+        self.hint_text_color = (0.5, 0.5, 0.6, 1)
+        self.padding = [dp(20), dp(15)]
+        self.font_size = dp(16)
+        self.multiline = False
+
+
+class GradientButton(Button):
+    """Button with gradient effect"""
+    gradient_colors = ListProperty([(0.2, 0.5, 0.9, 1), (0.4, 0.3, 0.9, 1)])
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.background_normal = ''
+        self.background_down = ''
+        self.background_color = (0, 0, 0, 0)
+        self.color = (1, 1, 1, 1)
+        self.bold = True
+        self.font_size = dp(16)
+        self.bind(pos=self._update_canvas, size=self._update_canvas)
+    
+    def _update_canvas(self, *args):
+        self.canvas.before.clear()
+        with self.canvas.before:
+            # Gradient background
+            Color(*self.gradient_colors[0])
+            self.rect = RoundedRectangle(
+                pos=self.pos, 
+                size=self.size,
+                radius=[dp(25)]
+            )
 
 
 class LoginScreen(Screen):
-    """Login/Signup screen"""
+    """Modern creative login screen"""
     
     mode = StringProperty('login')
-    
-    # Admin credentials - CHANGE THIS FOR PRODUCTION
     ADMIN_USER = 'admin'
     ADMIN_PASS = 'agora2024'
     
@@ -35,40 +79,79 @@ class LoginScreen(Screen):
     def _build_ui(self):
         self.clear_widgets()
         
-        # Main container
-        main = BoxLayout(orientation='vertical', padding=dp(25), spacing=dp(15))
+        # Root with animated gradient background
+        root = FloatLayout()
         
-        # Background
-        with main.canvas.before:
-            Color(0.05, 0.05, 0.08, 1)
-            self.bg_rect = RoundedRectangle(pos=main.pos, size=main.size)
-        main.bind(pos=self._update_bg, size=self._update_bg)
+        # Animated gradient background
+        with root.canvas.before:
+            # Deep space gradient
+            Color(0.02, 0.02, 0.08, 1)
+            self.bg_rect = Rectangle(pos=root.pos, size=root.size)
+            
+            # Abstract gradient orbs
+            Color(0.15, 0.05, 0.25, 0.4)
+            self.orb1 = Ellipse(pos=(dp(-100), dp(400)), size=(dp(400), dp(400)))
+            
+            Color(0.05, 0.15, 0.25, 0.3)
+            self.orb2 = Ellipse(pos=(dp(200), dp(-100)), size=(dp(350), dp(350)))
+            
+            Color(0.1, 0.3, 0.4, 0.2)
+            self.orb3 = Ellipse(pos=(dp(100), dp(600)), size=(dp(300), dp(300)))
         
-        # Spacer
-        main.add_widget(Widget(size_hint_y=0.1))
+        root.bind(pos=self._update_bg, size=self._update_bg)
         
-        # Title
-        main.add_widget(Label(
-            text='Agora AI',
-            font_size=dp(36),
+        # Main content container
+        content = BoxLayout(
+            orientation='vertical',
+            padding=dp(30),
+            spacing=dp(15),
+            pos_hint={'center_x': 0.5, 'center_y': 0.5},
+            size_hint=(0.9, 0.85)
+        )
+        
+        # Logo area with glow effect
+        content.add_widget(Widget(size_hint_y=0.05))
+        
+        logo_container = BoxLayout(
+            orientation='vertical',
+            size_hint_y=None,
+            height=dp(100),
+            padding=dp(10)
+        )
+        
+        # Glowing logo background
+        with logo_container.canvas.before:
+            Color(0.2, 0.4, 0.9, 0.1)
+            RoundedRectangle(
+                pos=(0, 0),
+                size=(dp(200), dp(80)),
+                radius=[dp(20)]
+            )
+        
+        logo_container.add_widget(Label(
+            text='AGORA',
+            font_size=dp(42),
             bold=True,
             color=(1, 1, 1, 1),
-            size_hint_y=None,
-            height=dp(50)
+            font_name='Roboto'  # Modern font
         ))
         
-        main.add_widget(Label(
-            text='Offline AI Platform',
-            font_size=dp(16),
-            color=(0.6, 0.6, 0.8, 1),
-            size_hint_y=None,
-            height=dp(30)
+        logo_container.add_widget(Label(
+            text='AI PLATFORM',
+            font_size=dp(14),
+            color=(0.4, 0.8, 1, 0.9),
+            bold=True,
+            letter_spacing=dp(4)
         ))
         
-        main.add_widget(Widget(size_hint_y=0.08))
+        content.add_widget(logo_container)
+        content.add_widget(Widget(size_hint_y=0.03))
         
-        # Mode Toggle
-        toggle = BoxLayout(
+        # Glassmorphism card
+        card = self._create_glass_card()
+        
+        # Mode toggle
+        toggle_box = BoxLayout(
             size_hint_y=None,
             height=dp(50),
             spacing=dp(10),
@@ -76,198 +159,200 @@ class LoginScreen(Screen):
         )
         
         self.login_btn = ToggleButton(
-            text='LOGIN',
+            text='SIGN IN',
             group='mode',
             state='down',
-            font_size=dp(16),
-            background_color=(0.2, 0.5, 0.9, 1)
+            font_size=dp(14),
+            background_color=(0.2, 0.5, 0.9, 0.8),
+            background_down='',
+            color=(1, 1, 1, 1),
+            bold=True
         )
         self.login_btn.bind(on_press=lambda x: self._set_mode('login'))
         
         self.signup_btn = ToggleButton(
-            text='SIGN UP',
+            text='CREATE ACCOUNT',
             group='mode',
-            font_size=dp(16),
-            background_color=(0.15, 0.15, 0.2, 1)
+            font_size=dp(14),
+            background_color=(0.1, 0.1, 0.15, 0.5),
+            background_down='',
+            color=(0.6, 0.6, 0.7, 1)
         )
         self.signup_btn.bind(on_press=lambda x: self._set_mode('signup'))
         
-        toggle.add_widget(self.login_btn)
-        toggle.add_widget(self.signup_btn)
-        main.add_widget(toggle)
+        toggle_box.add_widget(self.login_btn)
+        toggle_box.add_widget(self.signup_btn)
+        card.add_widget(toggle_box)
         
-        main.add_widget(Widget(size_hint_y=0.05))
+        card.add_widget(Widget(size_hint_y=0.03))
         
-        # Form Card
+        # Form fields
+        self.user_input = ModernTextInput(
+            hint_text='Username or Email',
+            size_hint_y=None,
+            height=dp(55)
+        )
+        card.add_widget(self._create_input_container('USERNAME', self.user_input))
+        
+        self.pass_input = ModernTextInput(
+            hint_text='Password',
+            password=True,
+            size_hint_y=None,
+            height=dp(55)
+        )
+        self.pass_input.bind(on_text_validate=self._do_action)
+        card.add_widget(self._create_input_container('PASSWORD', self.pass_input))
+        
+        # Confirm password for signup
+        self.confirm_container = BoxLayout(
+            orientation='vertical',
+            size_hint_y=None,
+            height=dp(85),
+            opacity=0
+        )
+        self.confirm_input = ModernTextInput(
+            hint_text='Confirm Password',
+            password=True,
+            size_hint_y=None,
+            height=dp(55)
+        )
+        self.confirm_container.add_widget(
+            self._create_input_container('CONFIRM PASSWORD', self.confirm_input)
+        )
+        card.add_widget(self.confirm_container)
+        
+        # Error message
+        self.error_label = Label(
+            text='',
+            font_size=dp(13),
+            color=(1, 0.4, 0.4, 1),
+            size_hint_y=None,
+            height=dp(25)
+        )
+        card.add_widget(self.error_label)
+        
+        card.add_widget(Widget(size_hint_y=0.02))
+        
+        # Action button with gradient
+        self.action_btn = GradientButton(
+            text='SIGN IN',
+            size_hint_y=None,
+            height=dp(55),
+            gradient_colors=[(0.2, 0.5, 0.9, 1), (0.5, 0.3, 0.8, 1)]
+        )
+        self.action_btn.bind(on_release=self._do_action)
+        card.add_widget(self.action_btn)
+        
+        content.add_widget(card)
+        
+        # Footer hint
+        content.add_widget(Widget(size_hint_y=0.05))
+        content.add_widget(Label(
+            text='admin / agora2024',
+            font_size=dp(11),
+            color=(0.4, 0.4, 0.5, 0.7)
+        ))
+        
+        content.add_widget(Widget(size_hint_y=0.1))
+        
+        root.add_widget(content)
+        self.add_widget(root)
+    
+    def _create_glass_card(self):
+        """Create glassmorphism card"""
         card = BoxLayout(
             orientation='vertical',
             padding=dp(25),
-            spacing=dp(15),
-            size_hint_y=None
+            spacing=dp(12),
+            size_hint_y=None,
+            height=dp(360)
         )
         
-        # Dynamic height based on mode
-        self.card_height_login = dp(200)
-        self.card_height_signup = dp(280)
-        card.height = self.card_height_login
-        
         with card.canvas.before:
-            Color(0.12, 0.12, 0.18, 1)
-            RoundedRectangle(pos=card.pos, size=card.size, radius=[dp(15)])
-        card.bind(pos=self._update_card, size=self._update_card)
-        self.form_card = card
+            # Glass effect - semi-transparent white
+            Color(1, 1, 1, 0.05)
+            self.glass_rect = RoundedRectangle(
+                pos=card.pos,
+                size=card.size,
+                radius=[dp(30)]
+            )
+            
+            # Border glow
+            Color(0.4, 0.6, 1, 0.1)
+            Line(
+                rounded_rectangle=(card.x, card.y, card.width, card.height, dp(30)),
+                width=dp(1.5)
+            )
         
-        # Username
-        card.add_widget(Label(
-            text='USERNAME',
-            font_size=dp(12),
-            color=(0.6, 0.6, 0.7, 1),
+        card.bind(pos=self._update_glass, size=self._update_glass)
+        return card
+    
+    def _create_input_container(self, label_text, input_widget):
+        """Create styled input container"""
+        container = BoxLayout(
+            orientation='vertical',
+            size_hint_y=None,
+            height=dp(85),
+            spacing=dp(5)
+        )
+        
+        container.add_widget(Label(
+            text=label_text,
+            font_size=dp(11),
+            color=(0.6, 0.7, 0.9, 0.8),
+            bold=True,
             halign='left',
             size_hint_y=None,
             height=dp(20),
             text_size=(None, None)
         ))
         
-        self.user_input = TextInput(
-            hint_text='Enter username',
-            font_size=dp(18),
-            multiline=False,
-            background_color=(0.15, 0.15, 0.2, 1),
-            foreground_color=(1, 1, 1, 1),
-            hint_text_color=(0.5, 0.5, 0.5, 1),
-            padding=[dp(15), dp(15)],
-            size_hint_y=None,
-            height=dp(55)
-        )
-        card.add_widget(self.user_input)
-        
-        # Password
-        card.add_widget(Label(
-            text='PASSWORD',
-            font_size=dp(12),
-            color=(0.6, 0.6, 0.7, 1),
-            halign='left',
-            size_hint_y=None,
-            height=dp(20)
-        ))
-        
-        self.pass_input = TextInput(
-            hint_text='Enter password',
-            font_size=dp(18),
-            multiline=False,
-            password=True,
-            background_color=(0.15, 0.15, 0.2, 1),
-            foreground_color=(1, 1, 1, 1),
-            hint_text_color=(0.5, 0.5, 0.5, 1),
-            padding=[dp(15), dp(15)],
-            size_hint_y=None,
-            height=dp(55)
-        )
-        self.pass_input.bind(on_text_validate=self._do_action)
-        card.add_widget(self.pass_input)
-        
-        # Confirm Password (signup only)
-        self.confirm_label = Label(
-            text='CONFIRM PASSWORD',
-            font_size=dp(12),
-            color=(0.6, 0.6, 0.7, 1),
-            halign='left',
-            size_hint_y=None,
-            height=dp(20)
-        )
-        card.add_widget(self.confirm_label)
-        
-        self.confirm_input = TextInput(
-            hint_text='Confirm password',
-            font_size=dp(18),
-            multiline=False,
-            password=True,
-            background_color=(0.15, 0.15, 0.2, 1),
-            foreground_color=(1, 1, 1, 1),
-            hint_text_color=(0.5, 0.5, 0.5, 1),
-            padding=[dp(15), dp(15)],
-            size_hint_y=None,
-            height=dp(55)
-        )
-        card.add_widget(self.confirm_input)
-        
-        # Hide confirm initially
-        self.confirm_label.opacity = 0
-        self.confirm_input.opacity = 0
-        self.confirm_input.disabled = True
-        
-        main.add_widget(card)
-        
-        main.add_widget(Widget(size_hint_y=0.03))
-        
-        # Action Button
-        self.action_btn = Button(
-            text='LOGIN',
-            font_size=dp(18),
-            bold=True,
-            background_color=(0.2, 0.5, 0.9, 1),
-            size_hint_y=None,
-            height=dp(55)
-        )
-        self.action_btn.bind(on_release=self._do_action)
-        main.add_widget(self.action_btn)
-        
-        # Error Label
-        self.error_label = Label(
-            text='',
-            font_size=dp(14),
-            color=(0.9, 0.3, 0.3, 1),
-            size_hint_y=None,
-            height=dp(30)
-        )
-        main.add_widget(self.error_label)
-        
-        main.add_widget(Widget(size_hint_y=0.1))
-        
-        # Dev hint
-        main.add_widget(Label(
-            text='Admin: admin / agora2024',
-            font_size=dp(10),
-            color=(0.4, 0.4, 0.5, 1),
-            size_hint_y=None,
-            height=dp(20)
-        ))
-        
-        self.add_widget(main)
+        container.add_widget(input_widget)
+        return container
+    
+    def _update_bg(self, instance, value):
+        self.bg_rect.pos = instance.pos
+        self.bg_rect.size = instance.size
+    
+    def _update_glass(self, instance, value):
+        instance.canvas.before.clear()
+        with instance.canvas.before:
+            Color(1, 1, 1, 0.05)
+            RoundedRectangle(
+                pos=instance.pos,
+                size=instance.size,
+                radius=[dp(30)]
+            )
+            Color(0.4, 0.6, 1, 0.1)
+            Line(
+                rounded_rectangle=(instance.x, instance.y, instance.width, instance.height, dp(30)),
+                width=dp(1.5)
+            )
     
     def _set_mode(self, mode):
         self.mode = mode
         if mode == 'login':
             self.login_btn.state = 'down'
-            self.login_btn.background_color = (0.2, 0.5, 0.9, 1)
+            self.login_btn.background_color = (0.2, 0.5, 0.9, 0.8)
+            self.login_btn.color = (1, 1, 1, 1)
             self.signup_btn.state = 'normal'
-            self.signup_btn.background_color = (0.15, 0.15, 0.2, 1)
-            self.action_btn.text = 'LOGIN'
-            self.confirm_label.opacity = 0
-            self.confirm_input.opacity = 0
-            self.confirm_input.disabled = True
-            self.form_card.height = self.card_height_login
+            self.signup_btn.background_color = (0.1, 0.1, 0.15, 0.5)
+            self.signup_btn.color = (0.6, 0.6, 0.7, 1)
+            self.action_btn.text = 'SIGN IN'
+            self.action_btn.gradient_colors = [(0.2, 0.5, 0.9, 1), (0.5, 0.3, 0.8, 1)]
+            self.confirm_container.opacity = 0
+            self.confirm_container.height = 0
         else:
             self.signup_btn.state = 'down'
-            self.signup_btn.background_color = (0.2, 0.5, 0.9, 1)
+            self.signup_btn.background_color = (0.2, 0.5, 0.9, 0.8)
+            self.signup_btn.color = (1, 1, 1, 1)
             self.login_btn.state = 'normal'
-            self.login_btn.background_color = (0.15, 0.15, 0.2, 1)
-            self.action_btn.text = 'SIGN UP'
-            self.confirm_label.opacity = 1
-            self.confirm_input.opacity = 1
-            self.confirm_input.disabled = False
-            self.form_card.height = self.card_height_signup
-    
-    def _update_bg(self, instance, value):
-        if hasattr(self, 'bg_rect'):
-            self.bg_rect.pos = instance.pos
-            self.bg_rect.size = instance.size
-    
-    def _update_card(self, instance, value):
-        instance.canvas.before.clear()
-        with instance.canvas.before:
-            Color(0.12, 0.12, 0.18, 1)
-            RoundedRectangle(pos=instance.pos, size=instance.size, radius=[dp(15)])
+            self.login_btn.background_color = (0.1, 0.1, 0.15, 0.5)
+            self.login_btn.color = (0.6, 0.6, 0.7, 1)
+            self.action_btn.text = 'CREATE ACCOUNT'
+            self.action_btn.gradient_colors = [(0.9, 0.3, 0.5, 1), (0.7, 0.2, 0.6, 1)]
+            self.confirm_container.opacity = 1
+            self.confirm_container.height = dp(85)
     
     def _do_action(self, *args):
         self.error_label.text = ''
@@ -276,7 +361,7 @@ class LoginScreen(Screen):
         password = self.pass_input.text.strip()
         
         if not username or not password:
-            self.error_label.text = 'Please enter username and password'
+            self.error_label.text = 'Please fill in all fields'
             return
         
         app = App.get_running_app()
@@ -291,9 +376,7 @@ class LoginScreen(Screen):
             self._do_signup(app, username, password)
     
     def _do_login(self, app, username, password):
-        # Check admin login FIRST
         if username == self.ADMIN_USER and password == self.ADMIN_PASS:
-            print(f"[LOGIN] Admin login successful")
             app.current_user = {
                 'username': 'admin',
                 'user_id': 'admin_001',
@@ -304,7 +387,6 @@ class LoginScreen(Screen):
             app.is_logged_in = True
             app.is_ai_purchased = True
             
-            # Generate license
             if app.auth:
                 app.auth.license_manager.generate_license('admin_001', is_admin=True)
             
@@ -325,7 +407,6 @@ class LoginScreen(Screen):
         if username in users:
             stored_hash = users[username].get('password_hash', '')
             if hashlib.sha256(password.encode()).hexdigest() == stored_hash:
-                print(f"[LOGIN] User login: {username}")
                 app.current_user = {
                     'username': username,
                     'user_id': users[username].get('user_id', username),
@@ -339,7 +420,7 @@ class LoginScreen(Screen):
                 app.screen_manager.current = 'platform_home'
                 return
         
-        self.error_label.text = 'Invalid username or password'
+        self.error_label.text = 'Invalid credentials'
     
     def _do_signup(self, app, username, password):
         users_file = app.storage_path / 'users.json' if app.storage_path else None
@@ -355,7 +436,6 @@ class LoginScreen(Screen):
             self.error_label.text = 'Username already exists'
             return
         
-        # Create user
         user_id = f"usr_{hashlib.md5(username.encode()).hexdigest()[:8]}"
         users[username] = {
             'user_id': user_id,
@@ -367,10 +447,9 @@ class LoginScreen(Screen):
             try:
                 with open(users_file, 'w') as f:
                     json.dump(users, f, indent=2)
-            except Exception as e:
-                print(f"[LOGIN] Error saving user: {e}")
+            except:
+                pass
         
-        print(f"[LOGIN] New user: {username}")
         app.current_user = {
             'username': username,
             'user_id': user_id,
@@ -389,7 +468,6 @@ class LoginScreen(Screen):
         self.confirm_input.text = ''
         self.error_label.text = ''
         
-        # Auto-login if has license
         app = App.get_running_app()
         if app.auth and app.auth.license_manager.has_valid_license():
             app.is_logged_in = True

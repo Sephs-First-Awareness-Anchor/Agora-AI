@@ -1,26 +1,94 @@
 #!/usr/bin/env python3
 """
-Agora AI Platform - Home Screen
+Agora AI Platform - Modern Home Screen
+======================================
+Creative, abstract, modern design with gradients and animations.
 """
 
 from kivy.uix.screenmanager import Screen
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
 from kivy.uix.button import Button
 from kivy.uix.scrollview import ScrollView
-from kivy.graphics import Color, RoundedRectangle
-from kivy.properties import StringProperty, BooleanProperty, NumericProperty
+from kivy.uix.widget import Widget
+from kivy.graphics import Color, RoundedRectangle, Ellipse, Line
+from kivy.graphics.vertex_instructions import Bezier
+from kivy.properties import StringProperty, NumericProperty, BooleanProperty, ListProperty
 from kivy.metrics import dp
 from kivy.app import App
+from kivy.animation import Animation
+from kivy.clock import Clock
+
+
+class AnimatedButton(Button):
+    """Button with hover/press animations"""
+    base_color = ListProperty([0.2, 0.5, 0.9, 1])
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.background_normal = ''
+        self.background_down = ''
+        self.background_color = (0, 0, 0, 0)
+        self.color = (1, 1, 1, 1)
+        self.bold = True
+        self.font_size = dp(16)
+        self.bind(pos=self._update_canvas, size=self._update_canvas)
+        self.bind(on_press=self._on_press)
+        self.bind(on_release=self._on_release)
+    
+    def _update_canvas(self, *args):
+        self.canvas.before.clear()
+        with self.canvas.before:
+            Color(*self.base_color)
+            RoundedRectangle(
+                pos=self.pos,
+                size=self.size,
+                radius=[dp(20)]
+            )
+    
+    def _on_press(self, *args):
+        anim = Animation(opacity=0.8, duration=0.1)
+        anim.start(self)
+    
+    def _on_release(self, *args):
+        anim = Animation(opacity=1, duration=0.1)
+        anim.start(self)
+
+
+class GlassCard(BoxLayout):
+    """Glassmorphism card widget"""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.bind(pos=self._update_canvas, size=self._update_canvas)
+    
+    def _update_canvas(self, instance, value):
+        instance.canvas.before.clear()
+        with instance.canvas.before:
+            # Frosted glass effect
+            Color(1, 1, 1, 0.08)
+            RoundedRectangle(
+                pos=instance.pos,
+                size=instance.size,
+                radius=[dp(24)]
+            )
+            # Glow border
+            Color(0.5, 0.7, 1, 0.15)
+            Line(
+                rounded_rectangle=(
+                    instance.x, instance.y,
+                    instance.width, instance.height, dp(24)
+                ),
+                width=dp(1)
+            )
 
 
 class PlatformHomeScreen(Screen):
-    """Agora AI Platform Home Screen"""
+    """Modern creative home screen"""
     
     public_handle = StringProperty("User")
     agora_credits = NumericProperty(0)
-    class_tokens = NumericProperty(0)
     is_ai_purchased = BooleanProperty(False)
     
     def __init__(self, **kwargs):
@@ -30,142 +98,145 @@ class PlatformHomeScreen(Screen):
     def _build_ui(self):
         self.clear_widgets()
         
-        # Main layout
-        root = BoxLayout(orientation='vertical')
+        # Root with animated background
+        root = FloatLayout()
         
-        # Header
-        header = BoxLayout(
-            orientation='horizontal',
-            size_hint_y=None,
-            height=dp(60),
-            padding=[dp(15), dp(10)]
-        )
-        with header.canvas.before:
-            Color(0.08, 0.08, 0.12, 1)
-            RoundedRectangle(pos=header.pos, size=header.size)
-        header.bind(pos=self._update_header, size=self._update_header)
+        # Abstract gradient background
+        with root.canvas.before:
+            # Deep space base
+            Color(0.015, 0.015, 0.06, 1)
+            self.bg_rect = RoundedRectangle(pos=root.pos, size=root.size)
+            
+            # Gradient orbs for depth
+            Color(0.25, 0.1, 0.4, 0.25)
+            self.orb1 = Ellipse(pos=(dp(-50), dp(500)), size=(dp(350), dp(350)))
+            
+            Color(0.1, 0.25, 0.4, 0.2)
+            self.orb2 = Ellipse(pos=(dp(220), dp(-50)), size=(dp(300), dp(300)))
+            
+            Color(0.15, 0.4, 0.35, 0.15)
+            self.orb3 = Ellipse(pos=(dp(50), dp(650)), size=(dp(250), dp(250)))
         
-        header.add_widget(Label(
-            text='AGORA AI',
-            font_size=dp(22),
-            bold=True,
-            color=(1, 1, 1, 1),
-            size_hint_x=1,
-            halign='left'
-        ))
-        
-        # Menu button (placeholder)
-        menu_btn = Button(
-            text='MENU',
-            font_size=dp(12),
-            size_hint=(None, None),
-            size=(dp(60), dp(35)),
-            background_color=(0.2, 0.2, 0.3, 1)
-        )
-        menu_btn.bind(on_release=self._show_menu)
-        header.add_widget(menu_btn)
-        
-        root.add_widget(header)
+        root.bind(pos=self._update_bg, size=self._update_bg)
         
         # Scrollable content
-        scroll = ScrollView()
+        scroll = ScrollView(
+            pos_hint={'center_x': 0.5, 'center_y': 0.5},
+            size_hint=(0.95, 0.95)
+        )
+        
         content = BoxLayout(
             orientation='vertical',
             padding=dp(20),
-            spacing=dp(15),
+            spacing=dp(20),
             size_hint_y=None
         )
         content.bind(minimum_height=content.setter('height'))
         
-        # Welcome Card
-        welcome = self._create_card(dp(100))
-        welcome.add_widget(Label(
-            text='Welcome back,',
-            font_size=dp(14),
-            color=(0.6, 0.6, 0.7, 1),
-            size_hint_y=None,
-            height=dp(25)
-        ))
+        # Header with glass effect
+        header = self._create_glass_container(dp(120))
         
-        self.handle_label = Label(
-            text=self.public_handle,
-            font_size=dp(24),
-            bold=True,
-            color=(1, 1, 1, 1),
-            size_hint_y=None,
-            height=dp(35)
+        header_content = BoxLayout(
+            orientation='vertical',
+            padding=dp(20)
         )
-        welcome.add_widget(self.handle_label)
         
-        self.credits_label = Label(
-            text=f'Credits: {self.agora_credits}',
-            font_size=dp(14),
-            color=(0.7, 0.7, 0.8, 1),
-            size_hint_y=None,
-            height=dp(25)
-        )
-        welcome.add_widget(self.credits_label)
-        
-        content.add_widget(welcome)
-        
-        # AI Status Card
-        status_card = self._create_card(dp(180))
-        
-        status_card.add_widget(Label(
-            text='AI COMPANION STATUS',
-            font_size=dp(12),
-            color=(0.5, 0.5, 0.6, 1),
-            size_hint_y=None,
-            height=dp(25)
-        ))
-        
-        self.status_text = Label(
-            text='ACTIVE' if self.is_ai_purchased else 'NOT PURCHASED',
+        header_content.add_widget(Label(
+            text='AGORA AI',
             font_size=dp(28),
             bold=True,
-            color=(0.3, 0.9, 0.5, 1) if self.is_ai_purchased else (0.9, 0.5, 0.3, 1),
-            size_hint_y=None,
-            height=dp(40)
+            color=(1, 1, 1, 1)
+        ))
+        
+        self.handle_display = Label(
+            text=f'Welcome, {self.public_handle}',
+            font_size=dp(16),
+            color=(0.6, 0.8, 1, 0.9)
         )
-        status_card.add_widget(self.status_text)
+        header_content.add_widget(self.handle_display)
         
-        # Launch/Purchase button
+        header.add_widget(header_content)
+        content.add_widget(header)
+        
+        # AI Status Card - The star of the show
+        status_card = self._create_glass_container(dp(240))
+        status_content = BoxLayout(
+            orientation='vertical',
+            padding=dp(25),
+            spacing=dp(10)
+        )
+        
+        # Status indicator with pulse
+        status_box = BoxLayout(
+            size_hint_y=None,
+            height=dp(40),
+            padding=[dp(20), 0]
+        )
+        
+        # Status dot
+        status_color = (0.3, 0.9, 0.5, 1) if self.is_ai_purchased else (0.9, 0.5, 0.3, 1)
+        with status_box.canvas.before:
+            Color(*status_color)
+            self.status_dot = Ellipse(pos=(0, 0), size=(dp(12), dp(12)))
+        
+        self.status_label = Label(
+            text='ACTIVE' if self.is_ai_purchased else 'LOCKED',
+            font_size=dp(14),
+            bold=True,
+            color=status_color,
+            halign='left'
+        )
+        status_box.add_widget(self.status_label)
+        
+        status_content.add_widget(status_box)
+        
+        # Big AI name
+        status_content.add_widget(Label(
+            text='AI Companion',
+            font_size=dp(32),
+            bold=True,
+            color=(1, 1, 1, 1)
+        ))
+        
+        status_content.add_widget(Label(
+            text='Your offline personal AI' if self.is_ai_purchased else 'Purchase to unlock',
+            font_size=dp(14),
+            color=(0.7, 0.7, 0.8, 1)
+        ))
+        
+        status_content.add_widget(Widget(size_hint_y=0.1))
+        
+        # Main action button
         if self.is_ai_purchased:
-            launch_btn = Button(
+            action_btn = AnimatedButton(
                 text='LAUNCH AI',
-                font_size=dp(18),
-                bold=True,
-                background_color=(0.2, 0.6, 0.4, 1),
-                color=(1, 1, 1, 1),
                 size_hint_y=None,
-                height=dp(55)
+                height=dp(60),
+                base_color=[0.2, 0.7, 0.5, 1]
             )
-            launch_btn.bind(on_release=self._launch_ai)
+            action_btn.bind(on_release=self._launch_ai)
         else:
-            launch_btn = Button(
-                text='PURCHASE AI',
-                font_size=dp(18),
-                bold=True,
-                background_color=(0.8, 0.4, 0.2, 1),
-                color=(1, 1, 1, 1),
+            action_btn = AnimatedButton(
+                text='UNLOCK AI',
                 size_hint_y=None,
-                height=dp(55)
+                height=dp(60),
+                base_color=[0.9, 0.4, 0.2, 1]
             )
-            launch_btn.bind(on_release=self._go_purchase)
+            action_btn.bind(on_release=self._go_purchase)
         
-        status_card.add_widget(Widget(size_hint_y=0.1))
-        status_card.add_widget(launch_btn)
-        
+        status_content.add_widget(action_btn)
+        status_card.add_widget(status_content)
         content.add_widget(status_card)
         
         # Quick Actions Grid
         content.add_widget(Label(
-            text='QUICK ACTIONS',
-            font_size=dp(12),
-            color=(0.5, 0.5, 0.6, 1),
+            text='EXPLORE',
+            font_size=dp(13),
+            bold=True,
+            color=(0.5, 0.6, 0.8, 0.8),
+            halign='left',
             size_hint_y=None,
             height=dp(30),
-            halign='left',
             text_size=(None, None)
         ))
         
@@ -177,147 +248,136 @@ class PlatformHomeScreen(Screen):
         )
         
         actions = [
-            ('Hubs', 'Find meeting places', self._go_hubs),
-            ('Rewards', 'View achievements', self._go_rewards),
-            ('Classes', 'Training packs', self._go_classes),
-            ('Library', 'Knowledge base', self._go_library),
+            ('Hubs', 'Find meetups', (0.2, 0.5, 0.9, 0.8)),
+            ('Rewards', 'Achievements', (0.5, 0.3, 0.8, 0.8)),
+            ('Classes', 'Training', (0.8, 0.3, 0.5, 0.8)),
+            ('Library', 'Knowledge', (0.3, 0.7, 0.6, 0.8)),
         ]
         
-        for title, desc, callback in actions:
-            grid.add_widget(self._create_action_card(title, desc, callback))
+        for title, subtitle, color in actions:
+            grid.add_widget(self._create_action_card(title, subtitle, color))
         
         content.add_widget(grid)
         
-        content.add_widget(Widget(size_hint_y=0.05))
+        content.add_widget(Widget(size_hint_y=0.1))
         
         scroll.add_widget(content)
         root.add_widget(scroll)
-        
         self.add_widget(root)
     
-    def _create_card(self, height):
-        """Create a styled card"""
-        card = BoxLayout(
+    def _create_glass_container(self, height):
+        """Create glassmorphism container"""
+        container = BoxLayout(
             orientation='vertical',
-            padding=dp(20),
-            spacing=dp(5),
             size_hint_y=None,
             height=height
         )
-        with card.canvas.before:
-            Color(0.12, 0.12, 0.18, 1)
-            RoundedRectangle(pos=card.pos, size=card.size, radius=[dp(15)])
-        card.bind(pos=self._update_card, size=self._update_card)
-        return card
+        
+        with container.canvas.before:
+            Color(1, 1, 1, 0.06)
+            RoundedRectangle(
+                pos=container.pos,
+                size=container.size,
+                radius=[dp(24)]
+            )
+            Color(0.5, 0.7, 1, 0.12)
+            Line(
+                rounded_rectangle=(0, 0, 100, height, dp(24)),
+                width=dp(1)
+            )
+        
+        container.bind(pos=self._update_glass, size=self._update_glass)
+        return container
     
-    def _create_action_card(self, title, desc, callback):
-        """Create an action button card"""
+    def _create_action_card(self, title, subtitle, color):
+        """Create action card"""
         card = BoxLayout(
             orientation='vertical',
-            padding=dp(15),
+            padding=dp(20),
             spacing=dp(5)
         )
-        with card.canvas.before:
-            Color(0.1, 0.1, 0.15, 1)
-            RoundedRectangle(pos=card.pos, size=card.size, radius=[dp(12)])
         
-        card.bind(pos=self._update_action_card, size=self._update_action_card)
+        with card.canvas.before:
+            Color(1, 1, 1, 0.05)
+            RoundedRectangle(
+                pos=card.pos,
+                size=card.size,
+                radius=[dp(20)]
+            )
+            Color(*color[:3], 0.3)
+            Line(
+                rounded_rectangle=(0, 0, 100, 100, dp(20)),
+                width=dp(1.5)
+            )
+        
+        card.bind(pos=self._update_card, size=self._update_card)
         
         card.add_widget(Label(
             text=title,
-            font_size=dp(18),
+            font_size=dp(20),
             bold=True,
-            color=(1, 1, 1, 1),
-            size_hint_y=None,
-            height=dp(30)
+            color=(1, 1, 1, 1)
         ))
         
         card.add_widget(Label(
-            text=desc,
+            text=subtitle,
             font_size=dp(12),
-            color=(0.6, 0.6, 0.7, 1),
-            size_hint_y=None,
-            height=dp(20)
+            color=(0.7, 0.7, 0.8, 1)
         ))
         
-        # Make clickable
+        # Invisible button for click
         btn = Button(
             background_color=(0, 0, 0, 0),
-            background_normal='',
-            size_hint=(1, 1),
-            pos_hint={'center_x': 0.5, 'center_y': 0.5}
+            size_hint=(1, 1)
         )
-        btn.bind(on_release=callback)
+        btn.bind(on_release=lambda x: print(f'[HOME] {title}'))
         card.add_widget(btn)
         
         return card
     
-    def _update_header(self, instance, value):
+    def _update_bg(self, instance, value):
+        self.bg_rect.pos = instance.pos
+        self.bg_rect.size = instance.size
+    
+    def _update_glass(self, instance, value):
         instance.canvas.before.clear()
         with instance.canvas.before:
-            Color(0.08, 0.08, 0.12, 1)
-            RoundedRectangle(pos=instance.pos, size=instance.size)
+            Color(1, 1, 1, 0.06)
+            RoundedRectangle(
+                pos=instance.pos,
+                size=instance.size,
+                radius=[dp(24)]
+            )
+            Color(0.5, 0.7, 1, 0.12)
+            Line(
+                rounded_rectangle=(instance.x, instance.y, instance.width, instance.height, dp(24)),
+                width=dp(1)
+            )
     
     def _update_card(self, instance, value):
         instance.canvas.before.clear()
         with instance.canvas.before:
-            Color(0.12, 0.12, 0.18, 1)
-            RoundedRectangle(pos=instance.pos, size=instance.size, radius=[dp(15)])
-    
-    def _update_action_card(self, instance, value):
-        instance.canvas.before.clear()
-        with instance.canvas.before:
-            Color(0.1, 0.1, 0.15, 1)
-            RoundedRectangle(pos=instance.pos, size=instance.size, radius=[dp(12)])
-    
-    def _show_menu(self, *args):
-        print("[PLATFORM] Menu clicked")
+            Color(1, 1, 1, 0.05)
+            RoundedRectangle(
+                pos=instance.pos,
+                size=instance.size,
+                radius=[dp(20)]
+            )
     
     def _launch_ai(self, *args):
-        """Launch the AI"""
         app = App.get_running_app()
-        if self.is_ai_purchased:
-            app.screen_manager.current = 'onboarding'
-        else:
-            self._go_purchase()
+        app.screen_manager.current = 'onboarding'
     
     def _go_purchase(self, *args):
-        """Go to purchase screen"""
         app = App.get_running_app()
         app.screen_manager.current = 'purchase'
     
-    def _go_hubs(self, *args):
-        print("[PLATFORM] Hubs")
-    
-    def _go_rewards(self, *args):
-        print("[PLATFORM] Rewards")
-    
-    def _go_classes(self, *args):
-        print("[PLATFORM] Classes")
-    
-    def _go_library(self, *args):
-        print("[PLATFORM] Library")
-    
     def on_enter(self, *args):
-        """Update UI when screen shown"""
         app = App.get_running_app()
         
-        # Update from app state
         if app.current_user:
             self.public_handle = app.current_user.get('display_name', 'User')
         self.is_ai_purchased = getattr(app, 'is_ai_purchased', False)
         
-        # Update labels
-        self.handle_label.text = self.public_handle
-        self.credits_label.text = f'Credits: {self.agora_credits}'
-        
-        # Update status
-        if self.is_ai_purchased:
-            self.status_text.text = 'ACTIVE'
-            self.status_text.color = (0.3, 0.9, 0.5, 1)
-        else:
-            self.status_text.text = 'NOT PURCHASED'
-            self.status_text.color = (0.9, 0.5, 0.3, 1)
-        
-        # Rebuild UI to update button
+        self.handle_display.text = f'Welcome, {self.public_handle}'
         self._build_ui()
