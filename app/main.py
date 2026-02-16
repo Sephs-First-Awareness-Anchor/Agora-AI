@@ -27,6 +27,7 @@ from app.ui.screens.platform_home import PlatformHomeScreen
 from app.ui.screens.purchase import PurchaseScreen
 from app.ui.screens.login import LoginScreen
 from app.auth import AgoraAuth
+from app.entity_manager import EntityManager, EntityIdentity
 
 # Import core AI modules
 from engine.offline_ai_core import OfflineAIFactory, OfflineAI
@@ -127,94 +128,14 @@ class KOCompanionApp(App):
         self.current_user = None
         self.is_logged_in = False
         
+        # Entity management
+        self.entity_manager = None
+        
     def on_start(self):
         """Called when the application starts"""
-        if platform == 'android':
-            from android.permissions import request_permissions, Permission
-
-            def on_permissions_result(permissions, grant_results):
-                """Callback after permissions are requested"""
-                logger.info(f"[APP] Permissions result: {dict(zip(permissions, grant_results))}")
-
-                # Check if RECORD_AUDIO was granted
-                audio_permission = Permission.RECORD_AUDIO
-                audio_granted = False
-                for p, g in zip(permissions, grant_results):
-                    if p == audio_permission and g:
-                        audio_granted = True
-                        break
-
-                if audio_granted:
-                    logger.info("[APP] RECORD_AUDIO granted")
-                    # Trigger audio and vision initialization
-                    if self.ai_runtime:
-                        logger.info("[APP] Triggering Runtime reinit after permissions...")
-                        def _reinit_runtime(dt):
-                            try:
-                                # Call the new reinit method
-                                if hasattr(self.ai_runtime, 'reinit_after_permissions'):
-                                    self.ai_runtime.reinit_after_permissions()
-                                else:
-                                    # Fallback to old behavior
-                                    ready = self.ai_runtime.audio.is_ready
-                                    logger.info(f"[APP] Audio engine ready: {ready}")
-                                    if ready:
-                                        self.ai_runtime.enable_listening()
-                            except Exception as e:
-                                logger.error(f"[APP] Runtime reinit error: {e}")
-                        Clock.schedule_once(_reinit_runtime, 0.5)
-
-            # Store permissions callback for camera handling
-            def on_all_permissions_result(permissions, grant_results):
-                """Handle all permissions including camera"""
-                on_permissions_result(permissions, grant_results)
-
-                # Check camera permission specifically for vision
-                camera_permission = Permission.CAMERA
-                camera_granted = False
-                for p, g in zip(permissions, grant_results):
-                    if p == camera_permission and g:
-                        camera_granted = True
-                        break
-
-                if camera_granted:
-                    logger.info("[APP] CAMERA permission granted")
-                    # Re-trigger vision if runtime exists
-                    if self.ai_runtime and hasattr(self.ai_runtime, 'vision'):
-                        def _reinit_vision(dt):
-                            try:
-                                if self.ai_runtime.vision and not self.ai_runtime.vision.is_active():
-                                    logger.info("[APP] Starting vision after camera permission...")
-                                    self.ai_runtime.vision.start()
-                            except Exception as e:
-                                logger.error(f"[APP] Vision reinit error: {e}")
-                        Clock.schedule_once(_reinit_vision, 0.5)
-
-            request_permissions([
-                Permission.RECORD_AUDIO,
-                Permission.WRITE_EXTERNAL_STORAGE,
-                Permission.READ_EXTERNAL_STORAGE,
-                Permission.CAMERA,
-            ], on_all_permissions_result)
-
-            # Request overlay permission separately (requires special handling on Android)
-            try:
-                from jnius import autoclass
-                Context = autoclass('android.content.Context')
-                Settings = autoclass('android.provider.Settings')
-                Intent = autoclass('android.content.Intent')
-                Uri = autoclass('android.net.Uri')
-                PythonActivity = autoclass('org.kivy.android.PythonActivity')
-                activity = PythonActivity.mActivity
-
-                # Check if we have overlay permission
-                if not Settings.canDrawOverlays(activity):
-                    # Open settings to grant overlay permission
-                    intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
-                    intent.setData(Uri.parse(f"package:{activity.getPackageName()}"))
-                    activity.startActivity(intent)
-            except Exception as e:
-                logger.warning(f"[APP] Could not request overlay permission: {e}")
+        # SECURITY: Request permissions lazily to avoid "harmful app" warning
+        # Permissions are now requested only when AI is activated, not at startup
+        logger.info("[APP] App started - permissions will be requested when AI is activated")
 
     def _init_storage(self):
         """Initialize storage paths. Must be called after app is running."""
@@ -250,9 +171,10 @@ class KOCompanionApp(App):
         if not self._init_storage():
             logger.warning("[APP] Storage initialization failed, using defaults")
 
-        # Initialize authentication system
+        # Initialize authentication and entity systems
         if self._storage_initialized:
             self.auth = AgoraAuth(str(self.storage_path))
+            self.entity_manager = EntityManager(str(self.storage_path))
             
             # Check for offline license FIRST (works without internet)
             has_license = self.auth.license_manager.has_valid_license()
@@ -478,28 +400,74 @@ class KOCompanionApp(App):
         )
         popup.open()
     
+    def _request_runtime_permissions(self):
+        """Request permissions at runtime when AI is activated"""
+        if platform == 'android':
+            from android.permissions import request_permissions, Permission
+            
+            def on_permissions_result(permissions, grant_results):
+                logger.info(f"[APP] Runtime permissions result: {dict(zip(permissions, grant_results))}")
+                # Continue activation regardless - AI works without all permissions
+            
+            # Request only essential permissions
+            request_permissions([
+                Permission.RECORD_AUDIO,
+                Permission.CAMERA,
+            ], on_permissions_result)
+    
     def _activate_ai(self, first_boot: bool = False):
         """
         Activate the AI instance with Runtime Authority.
-        Runtime is the SINGLE AUTHORITY over AI lifecycle, audio, vision, and state.
+        Includes entity binding and lazy permission requests.
         """
         if self._ai_activated:
             return
         self._ai_activated = True
+        
+        # Request permissions at activation time (not at startup)
+        # This avoids the "harmful app" warning
+        self._request_runtime_permissions()
 
         def _deferred_activation(dt):
             try:
                 if not self._storage_initialized:
                     self._init_storage()
+                
+                # ENTITY MANAGEMENT: Check/create entity
+                if self.entity_manager:
+                    if not self.entity_manager.current_entity:
+                        # Create new entity
+                        user_id = self.current_user.get('user_id', 'user') if self.current_user else 'user'
+                        self.entity_manager.create_new_entity(user_id=user_id)
+                        logger.info(f"[APP] Created new AI entity")
+                    else:
+                        # Try to activate existing entity
+                        entity = self.entity_manager.activate_entity()
+                        if entity:
+                            logger.info(f"[APP] Activated entity: {entity.entity_id[:16]}...")
+                        else:
+                            # Entity active on another device
+                            self._show_activation_error(
+                                "AI is active on another device.\n\n"
+                                "Use Transfer Device in settings to move your AI here."
+                            )
+                            self._ai_activated = False
+                            return
 
                 if not self.factory:
                     ai_data_path = os.path.join(self.storage_path, 'ai_data') if self.storage_path else self.user_data_dir
                     self.factory = OfflineAIFactory(ai_data_path)
 
-                # Activate AI instance
+                # Activate AI instance with entity ID
+                device_id = self._get_device_id()
+                if self.entity_manager and self.entity_manager.current_entity:
+                    # Include entity ID in device ID for tracking
+                    entity_prefix = self.entity_manager.current_entity.entity_id[:8]
+                    device_id = f"{entity_prefix}_{device_id}"
+                
                 self.ai_instance = self.factory.activate(
                     self.serial_code,
-                    device_id=self._get_device_id(),
+                    device_id=device_id,
                     device_name=self._get_device_name()
                 )
 

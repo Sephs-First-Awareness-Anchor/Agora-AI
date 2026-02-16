@@ -56,7 +56,9 @@ fullscreen = 0
 #
 
 # (list) Permissions
-android.permissions = INTERNET,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION,CAMERA,RECORD_AUDIO,BLUETOOTH,BLUETOOTH_ADMIN,BLUETOOTH_SCAN,BLUETOOTH_CONNECT,BLUETOOTH_ADVERTISE,NFC,VIBRATE,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
+# SECURITY: Minimal permissions to avoid "harmful app" warning
+# Additional permissions requested at runtime when needed
+android.permissions = INTERNET,CAMERA,RECORD_AUDIO,VIBRATE
 
 # (int) Target Android API, should be as high as possible.
 android.api = 33
