@@ -1,0 +1,19 @@
+# Agora AI Platform - Dependencies
+# Python 3.x
+
+# UI Framework
+kivy>=2.3.0
+kivymd>=1.2.0
+
+# Numerical Computing (required for perception pipelines)
+numpy>=1.24.0
+
+# Cryptography (for pack signing/verification)
+cryptography>=41.0.0
+
+# Compression (preferred; gzip fallback built-in)
+# zstandard>=0.22.0  # optional, uncomment if available
+
+# Android build dependencies (handled by buildozer)
+# pyjnius  # auto-included for android target
+# plyer    # optional platform abstractions
