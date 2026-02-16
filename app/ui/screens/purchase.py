@@ -186,11 +186,23 @@ class PurchaseScreen(Screen):
         self._show_message("Use 'Unlock for Testing' button for now")
     
     def _test_unlock(self, *args):
-        """Test unlock - sets purchased to True"""
+        """Test unlock - uses auth system to unlock"""
         app = App.get_running_app()
-        app.is_ai_purchased = True
-        app.save_config()
-        print("[PURCHASE] AI unlocked for testing!")
+        
+        # Use auth system to record purchase
+        if app.auth:
+            success = app.auth.record_purchase('offline_ai', receipt='test_receipt')
+            if success:
+                app.is_ai_purchased = True
+                app.save_config()
+                print("[PURCHASE] AI unlocked via auth system!")
+            else:
+                print("[PURCHASE] Failed to record purchase")
+        else:
+            # Fallback for testing without auth
+            app.is_ai_purchased = True
+            app.save_config()
+            print("[PURCHASE] AI unlocked (no auth system)")
         
         # Go back to platform home which will now show Launch AI
         app.screen_manager.current = 'platform_home'

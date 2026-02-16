@@ -25,6 +25,8 @@ from app.ui.screens.onboarding import OnboardingScreen
 from app.ui.screens.companion import CompanionScreen
 from app.ui.screens.platform_home import PlatformHomeScreen
 from app.ui.screens.purchase import PurchaseScreen
+from app.ui.screens.login import LoginScreen
+from app.auth import AgoraAuth
 
 # Import core AI modules
 from engine.offline_ai_core import OfflineAIFactory, OfflineAI
@@ -107,7 +109,7 @@ class KOCompanionApp(App):
     
     # State flags
     is_onboarded = BooleanProperty(False)
-    is_ai_purchased = BooleanProperty(True)  # Default True for testing - Platform purchase status
+    is_ai_purchased = BooleanProperty(False)  # PRODUCTION: False - requires purchase or admin login
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -119,6 +121,11 @@ class KOCompanionApp(App):
         self._storage_initialized = False
         self._ai_activated = False  # Prevents double activation
         self._first_boot_pending = False
+        
+        # Authentication system
+        self.auth = None
+        self.current_user = None
+        self.is_logged_in = False
         
     def on_start(self):
         """Called when the application starts"""
@@ -243,6 +250,16 @@ class KOCompanionApp(App):
         if not self._init_storage():
             logger.warning("[APP] Storage initialization failed, using defaults")
 
+        # Initialize authentication system
+        if self._storage_initialized:
+            self.auth = AgoraAuth(str(self.storage_path))
+            # Check if user is already logged in
+            if self.auth.is_logged_in():
+                self.current_user = self.auth.current_user
+                self.is_logged_in = True
+                self.is_ai_purchased = self.auth.check_ai_purchase()
+                logger.info(f"[APP] Restored session for: {self.auth.get_display_name()}")
+
         # Load existing config if storage is ready
         if self._storage_initialized:
             self._load_config()
@@ -254,20 +271,26 @@ class KOCompanionApp(App):
         # Create screen manager
         self.screen_manager = ScreenManager(transition=FadeTransition(duration=0.3))
 
-        # Add screens - Platform first, then AI
+        # Add all screens
+        self.login_screen = LoginScreen(name='login')
         self.platform_home_screen = PlatformHomeScreen(name='platform_home')
         self.purchase_screen = PurchaseScreen(name='purchase')
         self.onboarding_screen = OnboardingScreen(name='onboarding')
         self.companion_screen = CompanionScreen(name='companion')
 
+        self.screen_manager.add_widget(self.login_screen)
         self.screen_manager.add_widget(self.platform_home_screen)
         self.screen_manager.add_widget(self.purchase_screen)
         self.screen_manager.add_widget(self.onboarding_screen)
         self.screen_manager.add_widget(self.companion_screen)
 
-        # ALWAYS start at Platform Home - this is the Agora AI Platform hub
-        self.screen_manager.current = 'platform_home'
-        logger.info("[APP] Starting at Platform Home (Agora AI hub)")
+        # Start at Login if not authenticated, otherwise Platform Home
+        if self.is_logged_in:
+            self.screen_manager.current = 'platform_home'
+            logger.info("[APP] Starting at Platform Home (authenticated)")
+        else:
+            self.screen_manager.current = 'login'
+            logger.info("[APP] Starting at Login (authentication required)")
 
         # Wired evolution system disabled for working APK
 
@@ -292,9 +315,13 @@ class KOCompanionApp(App):
                 self.birthday = config.get('birthday', '')
                 self.serial_code = config.get('serial_code', '')
                 self.is_onboarded = config.get('is_onboarded', False)
-                self.is_ai_purchased = config.get('is_ai_purchased', True)  # Default True for testing
+                # Only use saved purchase status if user is logged in
+                if self.is_logged_in:
+                    self.is_ai_purchased = config.get('is_ai_purchased', False)
+                else:
+                    self.is_ai_purchased = False
 
-                logger.info(f"[APP] Loaded config: user={self.user_name}, is_onboarded={self.is_onboarded}, purchased={self.is_ai_purchased}")
+                logger.info(f"[APP] Loaded config: user={self.user_name}, onboarded={self.is_onboarded}, purchased={self.is_ai_purchased}")
             except Exception as e:
                 logger.error(f"[APP] Failed to load config: {e}")
         else:

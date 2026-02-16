@@ -322,8 +322,14 @@ class PlatformHomeScreen(Screen):
         """Called when screen is shown"""
         app = App.get_running_app()
         
-        # Sync with app's purchase status
-        self.is_ai_purchased = getattr(app, 'is_ai_purchased', True)
+        # Sync with auth system's purchase status
+        if app.auth:
+            self.is_ai_purchased = app.auth.check_ai_purchase()
+            # Update display name from auth
+            if app.auth.current_user:
+                self.public_handle = app.auth.get_display_name()
+        else:
+            self.is_ai_purchased = getattr(app, 'is_ai_purchased', False)
         
         # Update UI with current values
         self.handle_label.text = f'Handle: {self.public_handle}'
