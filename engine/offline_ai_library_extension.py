@@ -422,7 +422,7 @@ class LibraryExtension:
     def _get_fingerprint(self) -> str:
         """Get AI capability fingerprint."""
         try:
-            from .offline_ai_capabilities import CapabilityManager
+            from .agora_sync.offline_ai_capabilities import CapabilityManager
             manager = CapabilityManager(self.ai)
             manifest = manager.generate_manifest()
             return manifest.compute_fingerprint()
