@@ -332,6 +332,10 @@ class OfflineAI:
 
         self.interface_runtime = InterfaceRuntime(self.device, self.speech_runtime, self.vision, self)
 
+        # Learned response composer: turns learned language into replies, with a
+        # per-AI variation profile (specialization pair + random ability multipliers)
+        self._init_response_composer()
+
         # Load pretrained data on first boot (before loading persisted state)
         if HAS_PRETRAINED_LOADER and load_all_pretrained:
             try:
@@ -434,6 +438,55 @@ class OfflineAI:
 
         return False
 
+    def _init_response_composer(self):
+        """Create the composer and apply this AI's variation profile to its learning."""
+        from .offline_ai_response_composer import LearnedResponseComposer, AIVariationProfile
+        composer_dir = self.storage_dir / self.account_id / "composer"
+        is_new_profile = not (composer_dir / AIVariationProfile.FILE_NAME).exists()
+        self.response_composer = LearnedResponseComposer(
+            str(composer_dir),
+            seed_source=f"{self.account_id}:{self.serial_code}",
+            lexicon=self.lexicon,
+            evolution=self.language.intent_evolution.evo,
+            audio=self.audio,
+            vision=self.vision,
+            seed_lines=self._seed_lines,
+        )
+        profile = self.response_composer.profile
+        self.specialization = profile.specialization_profile()
+        gains = profile.gain_vector()
+        # Lexical gain sets how quickly heard words become stable lexemes (base 5 hearings)
+        self.lexicon.STABILITY_THRESHOLD = max(3, round(5 / max(0.5, gains.get("lexical", 1.0))))
+        # Personality offsets shape the voice genome once, when the AI is first created
+        if is_new_profile:
+            harmony = self.language.harmony
+            harmony.voice_genome = profile.apply_personality(harmony.voice_genome)
+        logger.info(f"[OFFLINE AI] Specialization {profile.primary.value}/{profile.secondary.value}, "
+                    f"gains {gains}")
+
+    def _seed_lines(self, intent: str, user_name: str) -> List[str]:
+        """Directed fallback lines, used while the companion has learned little."""
+        return self._directed_lines().get(intent, self._directed_lines()["INFORM"])
+
+    def compose_reply(self, analysis: Dict[str, Any]) -> str:
+        """Build reply content from what this AI has learned (falls back to directed lines)."""
+        language = analysis.get("language", {})
+        intent = language.get("intent", "INFORM")
+        user_input = analysis.get("user_input", self.last_user_input)
+        composer = getattr(self, "response_composer", None)
+        if composer is not None:
+            try:
+                valence = getattr(getattr(self, "affect", None), "valence", 0.0) or 0.0
+                text = composer.compose(intent, user_input, getattr(self, "user_name", "friend"),
+                                        style=language.get("style"), affect_valence=valence)
+                if text:
+                    language["composed"] = True
+                    return text
+            except Exception as e:
+                logger.error(f"[OFFLINE AI] Composer failed, using directed line: {e}")
+        import random
+        return random.choice(self._seed_lines(intent, getattr(self, "user_name", "friend")))
+
     def handle_voice_input(self, text: str):
         """
         Handle voice input with dismissal detection and auto-response.
@@ -464,9 +517,8 @@ class OfflineAI:
             logger.debug("[OFFLINE AI] Input ignored")
             return
 
-        # Generate a contextual response
-        intent = analysis.get('language', {}).get('intent', 'INFORM')
-        content = self._get_contextual_response(intent, text)
+        # Generate a response from learned language
+        content = self.compose_reply(analysis)
 
         response = self.generate_response(analysis, content)
         response_text = response.get("text", content) if isinstance(response, dict) else response
@@ -476,22 +528,18 @@ class OfflineAI:
             self.speak_text(response_text)
 
     def _get_contextual_response(self, intent: str, user_input: str) -> str:
-        """Generate contextual response content based on intent with personality"""
-        import random
+        """Reply content for this turn. Uses the learned composer with the last analysis."""
+        analysis = getattr(self, "_last_analysis", None)
+        if analysis is None or analysis.get("user_input") != user_input:
+            analysis = {"user_input": user_input, "language": {"intent": intent}}
+        return self.compose_reply(analysis)
 
+    def _directed_lines(self) -> Dict[str, List[str]]:
+        """The directed starter lines per intent (Agora's scripted baseline)."""
         # Get user name if available
         user_name = getattr(self, 'user_name', 'friend')
         ai_name = getattr(self, 'ai_name', 'KO')
         
-        # Determine emotional tone based on affect
-        valence = getattr(self, 'affect', None)
-        if valence:
-            is_positive = valence.valence > 0.2
-            is_excited = valence.arousal > 0.6
-        else:
-            is_positive = True
-            is_excited = False
-
         responses = {
             'CONNECT': [
                 f"Hello {user_name}! It's wonderful to see you!",
@@ -543,8 +591,7 @@ class OfflineAI:
             ],
         }
 
-        intent_responses = responses.get(intent, responses['INFORM'])
-        return random.choice(intent_responses)
+        return responses
 
     def _on_speech_text(self, text: str):
         """Callback for SpeechRuntime"""
@@ -552,8 +599,7 @@ class OfflineAI:
         analysis = self.process_input(text)
         if not analysis.get("ignored"):
             # Trigger autonomous response
-            intent = analysis.get('language', {}).get('intent', 'INFORM')
-            content = self._get_fallback_content(intent)
+            content = self.compose_reply(analysis)
             self.generate_response(analysis, content)
 
     def _get_fallback_content(self, intent: str) -> str:
@@ -1099,7 +1145,7 @@ class OfflineAI:
             self.entropic.advance_generation()
 
         # Preliminary language analysis for intent context
-        language_analysis_pre = self.language.process_input(user_input)
+        language_analysis_pre = self.language.process_input(user_input, commit=False)
 
         # 0. Voice recognition
         current_voice_profile = None
@@ -1163,6 +1209,14 @@ class OfflineAI:
         # 5. Multimodal Grounding (Section VIII)
         self._process_multimodal_grounding(language_analysis["intent"], user_input, visual_analysis)
 
+        # 5.5 Composer learns topics, associations and the user's own phrasing
+        composer = getattr(self, "response_composer", None)
+        if composer is not None:
+            try:
+                composer.observe_user_turn(language_analysis["intent"], user_input)
+            except Exception as e:
+                logger.error(f"[OFFLINE AI] Composer observe failed: {e}")
+
         # 6. Entropic Pressure Query
         pressure = self.entropic.query_pressure(
             language_analysis["intent"],
@@ -1184,7 +1238,8 @@ class OfflineAI:
             "proactive_suggestions": proactive_suggestions,
             "rng_seed": rng_seed
         }
-        
+        self._last_analysis = analysis
+
         return analysis
     
     def _executive_control(self, analysis: Dict[str, Any]):
@@ -1270,6 +1325,10 @@ class OfflineAI:
 
         # Apply Executive Control
         self._executive_control(analysis)
+
+        # Feedback passed with this turn trains the composer's selection
+        if user_feedback and getattr(self, "response_composer", None) is not None:
+            self.response_composer.record_feedback(user_feedback.get("satisfaction", 0.5))
 
         # Apply Entropic Deformation (simulated by style biasing in language)
         pressure = analysis.get("entropic_pressure", 0.0)
@@ -1421,6 +1480,8 @@ class OfflineAI:
             "accuracy": max(0.0, min(1.0, accuracy)),
             "helpfulness": max(0.0, min(1.0, helpfulness))
         }
+        if getattr(self, "response_composer", None) is not None:
+            self.response_composer.record_feedback(feedback["satisfaction"])
         
         # Apply feedback to law registry
         feedback_results = self.law_registry.law_sets["FEEDBACK"].analyze_dialogue(
@@ -1490,6 +1551,8 @@ class OfflineAI:
             self.audio.save_state()
         if self.vision:
             self.vision.save_state()
+        if getattr(self, "response_composer", None) is not None:
+            self.response_composer.save_state()
 
         # Expression Persistence
         expr_path = self.storage_dir / self.account_id / "expression_state.json"

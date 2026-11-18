@@ -409,7 +409,9 @@ class CapabilityManager:
             "max_trait_delta_lifetime": 0.40,
         }
         
-        # Default specialization if none provided
+        # Default specialization if none provided: the AI's own, else companion
+        if specialization is None:
+            specialization = getattr(ai, 'specialization', None)
         if specialization is None:
             specialization = SpecializationProfile(
                 primary=SpecializationType.COMPANION,

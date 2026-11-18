@@ -24,7 +24,7 @@ from collections import deque
 
 from kivy.clock import Clock
 from kivy.core.window import Window
-from engine.offline_ai_logic import OperatingMode
+from .offline_ai_logic import OperatingMode
 
 logger = logging.getLogger(__name__)
 
