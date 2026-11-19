@@ -130,7 +130,7 @@ class TestOnboarding52(unittest.TestCase):
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
-    def test_legacy_specialization_migrates_without_erasing_aptitude(self):
+    def test_legacy_identity_never_silently_reborn(self):
         root = Path(tempfile.mkdtemp())
         try:
             previous = AIVariationProfile.load_or_create(root, "legacy")
