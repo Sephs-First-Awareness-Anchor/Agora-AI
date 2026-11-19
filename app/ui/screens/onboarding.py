@@ -694,7 +694,7 @@ class OnboardingScreen(Screen):
     def _complete_onboarding(self, *args):
         """Complete onboarding and launch companion"""
         app = App.get_running_app()
-        app.complete_onboarding(
+        app.begin_name_enrollment(
             user_name=self.user_name,
             ai_name=self.ai_name,
             favorite_color=self.favorite_color,
