@@ -1,0 +1,34 @@
+name: Agora pre-APK integration checks
+
+on:
+  push:
+    branches:
+      - feature/agora-52-onboarding-live-companion
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  unit-and-integration:
+    name: 52 birth identities, learned replies and UI contracts
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install headless UI and Python dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb libsdl2-2.0-0 libgl1 libmtdev1
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Check Python syntax
+        run: python -m compileall -q app engine tests
+      - name: Run the pre-app test suites
+        env:
+          KIVY_NO_ARGS: "1"
+          KIVY_NO_CONSOLELOG: "1"
+          KIVY_LOG_LEVEL: warning
+        run: xvfb-run -a python -m unittest -v tests.test_response_composer tests.test_live_app_contract tests.agora_integration_test
