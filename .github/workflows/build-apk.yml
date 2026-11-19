@@ -48,10 +48,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .buildozer
-          key: buildozer-local-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}-${{ hashFiles('**/*.py') }}
+          # The compiled Python/numpy dist must come from the same p4a + NDK as the
+          # spec, so only reuse a build made with this exact buildozer.spec.
+          key: buildozer-local-v2-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}-${{ hashFiles('**/*.py') }}
           restore-keys: |
-            buildozer-local-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}-
-            buildozer-local-${{ runner.os }}-
+            buildozer-local-v2-${{ runner.os }}-${{ hashFiles('**/buildozer.spec') }}-
 
       - name: Install system dependencies
         run: |
