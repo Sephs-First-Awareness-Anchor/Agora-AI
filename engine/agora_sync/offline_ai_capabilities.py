@@ -53,6 +53,47 @@ class SpecializationType(Enum):
     GUARDIAN = "guardian"            # Safety, protection
 
 
+# Canonical 52 birth configurations: 13 original ordered pairs, 13 reversed
+# pairs, and introverted/extroverted behavior for each. A–Z naming mirrors
+# LETTER_PERSONA_MAP in offline_ai_expression.py.
+# Frozen explicit order ensures new enum entries do not silently move births.
+_ONBOARDING_PAIR_RING = (
+    (SpecializationType.STORYTELLER, SpecializationType.POET),
+    (SpecializationType.POET, SpecializationType.MUSICIAN),
+    (SpecializationType.MUSICIAN, SpecializationType.ARTIST),
+    (SpecializationType.ARTIST, SpecializationType.ANALYST),
+    (SpecializationType.ANALYST, SpecializationType.LOGICIAN),
+    (SpecializationType.LOGICIAN, SpecializationType.PHILOSOPHER),
+    (SpecializationType.PHILOSOPHER, SpecializationType.COMPANION),
+    (SpecializationType.COMPANION, SpecializationType.MENTOR),
+    (SpecializationType.MENTOR, SpecializationType.LISTENER),
+    (SpecializationType.LISTENER, SpecializationType.BUILDER),
+    (SpecializationType.BUILDER, SpecializationType.EXPLORER),
+    (SpecializationType.EXPLORER, SpecializationType.GUARDIAN),
+    (SpecializationType.GUARDIAN, SpecializationType.STORYTELLER),
+)
+ONBOARDING_SPECIALIZATION_PAIRS = {
+    letter: (_ONBOARDING_PAIR_RING[i] if i < 13
+             else tuple(reversed(_ONBOARDING_PAIR_RING[i - 13])))
+    for i, letter in enumerate("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+}
+
+
+def onboarding_letter(ai_name: str) -> str:
+    """Use the original first-letter selection, with B as fallback."""
+    name = (ai_name or "").strip()
+    letter = name[0].upper() if name else "B"
+    return letter if letter in ONBOARDING_SPECIALIZATION_PAIRS else "B"
+
+
+def onboarding_specialization(ai_name: str, mode: str) -> "SpecializationProfile":
+    """One of 26 pairs x two modes; no randomized birth specialization."""
+    if mode not in ("introvert", "extrovert"):
+        raise ValueError("Onboarding mode must be introvert or extrovert")
+    primary, secondary = ONBOARDING_SPECIALIZATION_PAIRS[onboarding_letter(ai_name)]
+    return SpecializationProfile(primary, secondary, behavior_mode=mode)
+
+
 # Default learning gain multipliers per specialization
 DEFAULT_GAIN_MULTIPLIERS: Dict[SpecializationType, Dict[str, float]] = {
     SpecializationType.STORYTELLER: {
@@ -115,7 +156,8 @@ class SpecializationProfile:
     """Learning gain multipliers for a specialization pair."""
     primary: SpecializationType
     secondary: SpecializationType
-    
+    behavior_mode: str = "introvert"
+
     def get_gain_vector(self) -> Dict[str, float]:
         """Compute combined gain vector from primary and secondary."""
         primary_gains = DEFAULT_GAIN_MULTIPLIERS.get(self.primary, {})
@@ -136,6 +178,7 @@ class SpecializationProfile:
         return {
             "primary": self.primary.value,
             "secondary": self.secondary.value,
+            "behavior_mode": self.behavior_mode,
             "gain_vector": self.get_gain_vector()
         }
     
@@ -143,7 +186,8 @@ class SpecializationProfile:
     def from_dict(cls, data: Dict[str, Any]) -> 'SpecializationProfile':
         return cls(
             primary=SpecializationType(data.get("primary", "companion")),
-            secondary=SpecializationType(data.get("secondary", "companion"))
+            secondary=SpecializationType(data.get("secondary", "companion")),
+            behavior_mode=data.get("behavior_mode", "introvert")
         )
 
 
@@ -216,7 +260,7 @@ class CapabilityManifest:
             "vision": self.vision_competency.content_hash,
             "audio": self.audio_competency.content_hash,
             "policy": self.policy_version.content_hash,
-            "spec": f"{self.specialization.primary.value}_{self.specialization.secondary.value}"
+            "spec": f"{self.specialization.primary.value}_{self.specialization.secondary.value}_{self.specialization.behavior_mode}"
         }
         return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()[:32]
     
