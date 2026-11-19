@@ -362,6 +362,14 @@ class BirthStore:
                 os.link(temp,self.path)
             except FileExistsError:
                 return self.read()
+            except OSError:
+                # Android's app sandbox refuses hard links (EACCES), so fall
+                # back to an atomic rename. Commits run once per account in
+                # one process, so checking first still never replaces a
+                # committed identity, and rename never leaves a partial file.
+                if self.path.exists():
+                    return self.read()
+                os.rename(temp,self.path)
         finally:
             try:
                 os.unlink(temp)

@@ -9,7 +9,7 @@ Runs the real app headless (under xvfb) through the path a new owner
 takes: six name recordings, the Meet button, activation of the born AI,
 and three typed messages. Exits non-zero if anything raises, activation
 fails, or no reply reaches the chat. Mock audio stands in for the phone's
-microphone and speech engines.
+microphone and speech engines, and hard links are refused as on Android.
 
 Usage: KIVY_NO_ARGS=1 xvfb-run -a python tests/meet_flow_check.py
 """
@@ -29,7 +29,16 @@ os.environ["HOME"] = tempfile.mkdtemp(prefix="agora-meet-")
 from kivy.base import ExceptionHandler, ExceptionManager  # noqa: E402
 from kivy.clock import Clock  # noqa: E402
 
+import engine.agora_birth  # noqa: E402
 from app.main import KOCompanionApp  # noqa: E402
+
+
+def _android_refuses_hard_links(*args, **kwargs):
+    raise PermissionError(13, "Permission denied")
+
+
+# Behave like the phone: Android's app sandbox refuses hard links.
+engine.agora_birth.os.link = _android_refuses_hard_links
 
 MESSAGES = ["hi, my dog Deeni loves the park",
             "the park was sunny today",

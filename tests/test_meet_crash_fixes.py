@@ -10,12 +10,14 @@ Pressing Meet closed the app on a phone. Causes covered here:
   ``lambda dt: ...`` but called with no argument, raising inside the clock
 - creating the first entity used ``uuid`` without importing it
 - an uncaught clock error closed the app instead of being recorded
+- Android's sandbox refuses hard links, so committing the birth record failed
 """
 
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from kivy.base import ExceptionManager
 
@@ -50,6 +52,27 @@ class TestFirstEntity(unittest.TestCase):
         from app.entity_manager import EntityIdentity
         entity = EntityIdentity(user_id="tester")
         self.assertTrue(entity.memory_id.startswith("MEM-"))
+
+
+class TestBirthCommitOnAndroid(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_commit_works_when_hard_links_are_refused(self):
+        from engine.agora_birth import BirthStore, select_birth
+        first = select_birth(ai_name="Poedex", mode="introvert", require_audio=False)
+        other = select_birth(ai_name="Zed", mode="extrovert", require_audio=False)
+        refused = PermissionError(13, "Permission denied")
+        with mock.patch("engine.agora_birth.os.link", side_effect=refused):
+            committed = BirthStore(self.tmp).commit(first)
+            again = BirthStore(self.tmp).commit(other)
+        self.assertEqual(committed["primary"], first.primary)
+        self.assertEqual(again, BirthStore(self.tmp).read())
+        self.assertEqual(again["mode"], "introvert")
+        self.assertEqual([p.name for p in self.tmp.iterdir()], ["birth_record.json"])
 
 
 class TestCrashGuard(unittest.TestCase):
