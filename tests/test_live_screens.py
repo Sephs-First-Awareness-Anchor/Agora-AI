@@ -77,7 +77,7 @@ class TestRestoredOnboarding(unittest.TestCase):
         screen.user_name_input.text = "Tester"
         screen.birthday_input.text = "July 31"
         screen._next_from_user()
-        receiver = SimpleNamespace(complete_onboarding=Mock())
+        receiver = SimpleNamespace(begin_name_enrollment=Mock())
         with patch("app.ui.screens.onboarding.App.get_running_app", return_value=receiver):
             screen._complete_onboarding()
         receiver.complete_onboarding.assert_called_once_with(
