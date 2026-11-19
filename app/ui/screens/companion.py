@@ -5,6 +5,8 @@ Agora AI Platform - Modern Companion Screen
 Creative, modern chat interface.
 """
 
+import logging
+
 from kivy.uix.screenmanager import Screen
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
@@ -20,13 +22,18 @@ from kivy.app import App
 from kivy.clock import Clock
 
 
+logger = logging.getLogger(__name__)
+
+
 class CompanionScreen(Screen):
-    """Modern AI companion screen"""
-    
+    """Active Agora companion UI, connected through the one Runtime Authority."""
+
     is_listening = False
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.ai_instance = None
+        self.runtime = None
         Clock.schedule_once(self._build_ui, 0)
     
     def _build_ui(self, *args):
@@ -93,7 +100,17 @@ class CompanionScreen(Screen):
         header.add_widget(back_btn)
         
         content.add_widget(header)
-        
+
+        # Real procedural face owned by the AI (not a decorative placeholder).
+        self.face_container = FloatLayout(size_hint_y=None, height=dp(175))
+        content.add_widget(self.face_container)
+        self.status_label = Label(
+            text="Connecting...", font_size=dp(12),
+            color=(0.6, 0.8, 1, 0.9),
+            size_hint_y=None, height=dp(24)
+        )
+        content.add_widget(self.status_label)
+
         # Chat area
         self.chat_scroll = ScrollView(
             size_hint_y=0.7
@@ -110,8 +127,7 @@ class CompanionScreen(Screen):
         self.chat_scroll.add_widget(self.chat_container)
         content.add_widget(self.chat_scroll)
         
-        # Welcome message
-        self._add_message("Hello! I'm your AI companion. How can I help you today?", is_ai=True)
+        # The AI owns its greeting and all subsequent response text.
         
         # Input area
         input_box = BoxLayout(
@@ -254,25 +270,81 @@ class CompanionScreen(Screen):
                 radius=[dp(20)]
             )
     
+    def on_enter(self, *args):
+        """One activation after onboarding, then reuse the persisted instance."""
+        app = App.get_running_app()
+        if not getattr(app, "serial_code", ""):
+            self._show_speech("Complete onboarding to activate your companion.", False)
+            return
+        if not getattr(app, "_ai_activated", False):
+            first_boot = getattr(app, "_first_boot_pending", False)
+            app._first_boot_pending = False
+            app._activate_ai(first_boot=first_boot)
+        elif getattr(app, "ai_instance", None) and self.ai_instance is None:
+            self.connect_ai(app.ai_instance, getattr(app, "ai_runtime", None))
+
+    def connect_ai(self, ai_instance, runtime=None):
+        """Connect the original face and runtime authority without cloning them."""
+        self.ai_instance = ai_instance
+        self.runtime = runtime
+
+        def attach(dt):
+            if not hasattr(self, "face_container"):
+                Clock.schedule_once(attach, 0.05)
+                return
+            self.face_container.clear_widgets()
+            face = getattr(ai_instance, "face_widget", None)
+            if face is not None:
+                if face.parent is not None:
+                    face.parent.remove_widget(face)
+                self.face_container.add_widget(face)
+            self.status_label.text = "Ready" if runtime is not None else "Connecting..."
+        Clock.schedule_once(attach, 0)
+
+    def _show_speech(self, text, is_ai=True):
+        """The runtime adapter supplies actual text from text/ASR processing."""
+        if not hasattr(self, "status_label"):
+            return
+        if text in ("Listening...", "Thinking...", "Consolidating..."):
+            self.status_label.text = text
+        elif is_ai and text:
+            self.status_label.text = "Speaking"
+            self._add_message(text, is_ai=True)
+        elif text:
+            self.status_label.text = text
+
+    def _hide_speech(self):
+        if hasattr(self, "status_label"):
+            self.status_label.text = "Ready"
+
     def _send_message(self, *args):
-        text = self.text_input.text.strip()
-        if text:
-            self._add_message(text, is_ai=False)
-            self.text_input.text = ''
-            # Simulate AI response
-            Clock.schedule_once(lambda dt: self._add_message("I received your message! (Demo response)", is_ai=True), 1)
-    
+        if not hasattr(self, "text_input"):
+            return
+        message = self.text_input.text.strip()
+        if not message:
+            return
+        if self.runtime is None:
+            self.status_label.text = "Companion is still connecting"
+            return
+        self.text_input.text = ""
+        self._add_message(message, is_ai=False)
+        # Typed messages follow the same Runtime path as recognized voice.
+        Clock.schedule_once(lambda dt: self.runtime._process_text_input(message), 0)
+
     def _start_listening(self, *args):
-        self.is_listening = True
-        self.mic_btn.text = 'Listening...'
-        self.mic_btn.background_color = (0.3, 0.7, 0.4, 1)
-        print("[MIC] Started listening")
-    
+        if self.runtime is None:
+            self.status_label.text = "Microphone not connected"
+            return
+        self.is_listening = bool(self.runtime.enable_listening())
+        self.mic_btn.text = "Listening..." if self.is_listening else "Microphone unavailable"
+        if self.is_listening:
+            self.mic_btn.background_color = (0.3, 0.7, 0.4, 1)
+
     def _stop_listening(self, *args):
+        # Runtime manages continuous ASR and the introvert/extrovert policy.
         self.is_listening = False
-        self.mic_btn.text = 'Hold to Speak'
+        self.mic_btn.text = "Tap to Speak"
         self.mic_btn.background_color = (0.9, 0.3, 0.4, 1)
-        print("[MIC] Stopped listening")
     
     def _go_back(self, *args):
         app = App.get_running_app()
