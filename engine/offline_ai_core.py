@@ -457,6 +457,7 @@ class OfflineAI:
             seed_lines=self._seed_lines,
             ai_name=self.onboarding_profile.ai_name if self.onboarding_profile else "",
             behavior_mode=self.onboarding_profile.mode if self.onboarding_profile else "",
+            birth_record=getattr(self.onboarding_profile, "birth_record", None),
         )
         profile = self.response_composer.profile
         self.specialization = profile.specialization_profile()
@@ -715,8 +716,17 @@ class OfflineAI:
 
             # Fix IndexError when ai_name is empty
             name = profile.ai_name if profile.ai_name else "KO"
-            letter = name[0].upper()
-            persona_key = LETTER_PERSONA_MAP.get(letter, "B_WARM")
+            birth = getattr(profile, "birth_record", None)
+            if birth is not None:
+                persona_key = birth["persona_key"]
+                if birth["mode"] != profile.mode:
+                    raise ValueError("Birth mode must not change after commitment")
+                if persona_key not in BOOT_PERSONAS or BOOT_PERSONAS[persona_key]["mode"] not in ("both",profile.mode):
+                    raise ValueError("Committed persona is incompatible with birth mode")
+            else:
+                # Unmigrated existing companions retain the original persona.
+                letter = name[0].upper()
+                persona_key = LETTER_PERSONA_MAP.get(letter, "B_WARM")
             self.current_persona_key = persona_key
             persona = BOOT_PERSONAS[persona_key]
 
