@@ -343,6 +343,15 @@ class KOCompanionApp(App):
 
     def capture_enrollment_name(self, done):
         """Exactly one short recording at a time, owned by the audio subsystem."""
+        if kivy_platform == "android":
+            from android.permissions import (
+                check_permission, request_permissions, Permission)
+            if not check_permission(Permission.RECORD_AUDIO):
+                request_permissions([Permission.RECORD_AUDIO])
+                Clock.schedule_once(lambda dt: done(
+                    "Microphone access is not granted yet. Allow microphone "
+                    "permission, then tap Record again."), 0)
+                return
         session=self.get_pending_enrollment()
         target=session.next_target()
         if target is None:
