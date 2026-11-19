@@ -31,4 +31,19 @@ jobs:
           KIVY_NO_ARGS: "1"
           KIVY_NO_CONSOLELOG: "1"
           KIVY_LOG_LEVEL: warning
-        run: xvfb-run -a python -m unittest -v tests.test_response_composer tests.test_live_app_contract tests.agora_integration_test
+        run: |
+          xvfb-run -a python - <<'PY'
+          import unittest
+          names = (
+              "tests.test_response_composer",
+              "tests.test_live_app_contract",
+              "tests.test_live_screens",
+              "tests.agora_integration_test",
+          )
+          suite = unittest.defaultTestLoader.loadTestsFromNames(names)
+          with open("preapp-results.txt", "w", encoding="utf-8") as report:
+              result = unittest.TextTestRunner(stream=report, verbosity=2).run(suite)
+          if result.testsRun < 30 or not result.wasSuccessful():
+              raise SystemExit(1)
+          PY
+          cat preapp-results.txt
