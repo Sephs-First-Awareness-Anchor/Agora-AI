@@ -263,14 +263,16 @@ class AIVariationProfile:
 
     @classmethod
     def generate(cls, seed_source: str, ai_name: str = "",
-                 mode: str = "") -> "AIVariationProfile":
+                 mode: str = "", birth_record=None) -> "AIVariationProfile":
         seed = hashlib.sha256(f"agora-variation:{seed_source}".encode()).hexdigest()
         rng = random.Random(seed)
-        if ai_name and mode:
-            birth = onboarding_specialization(ai_name, mode)
-            primary, secondary = birth.primary, birth.secondary
+        if birth_record is not None:
+            primary = SpecializationType(birth_record["primary"])
+            secondary = SpecializationType(birth_record["secondary"])
+            mode = birth_record["mode"]
         else:
-            # Standalone/headless legacy callers have no onboarding identity.
+            # Legacy/headless compatibility only. App startup refuses a new
+            # identity without the post-audio immutable birth record.
             roster = list(SpecializationType)
             primary = rng.choice(roster)
             secondary = rng.choice([s for s in roster if s != primary] or roster)
@@ -281,29 +283,30 @@ class AIVariationProfile:
 
     @classmethod
     def load_or_create(cls, storage_dir: Path, seed_source: str,
-                       ai_name: str = "", mode: str = "") -> "AIVariationProfile":
+                       ai_name: str = "", mode: str = "",
+                       birth_record=None) -> "AIVariationProfile":
         path = Path(storage_dir) / cls.FILE_NAME
         if path.exists():
             try:
                 with open(path, "r") as f:
                     profile = cls.from_dict(json.load(f))
-                    # Upgrade an existing pre-onboarding random specialization
-                    # once, preserving learned material and personalized offsets.
-                    if ai_name and mode and not profile.onboarding_name:
-                        born = onboarding_specialization(ai_name, mode)
-                        profile.primary, profile.secondary = born.primary, born.secondary
-                        profile.onboarding_name = ai_name
-                        profile.behavior_mode = mode
-                        profile.save(storage_dir)
-                    elif ai_name and mode and (
-                        onboarding_letter(profile.onboarding_name) != onboarding_letter(ai_name)
-                        or profile.behavior_mode != mode
+                    # Existing companions are NOT silently reborn, even when
+                    # new pronunciation or onboarding information appears.
+                    if birth_record is not None and (
+                        profile.primary.value != birth_record["primary"]
+                        or profile.secondary.value != birth_record["secondary"]
+                        or (profile.behavior_mode and
+                            profile.behavior_mode != birth_record["mode"])
                     ):
-                        logger.warning("[COMPOSER] Birth identity already bound; ignoring later mismatch")
+                        raise ValueError("Committed birth conflicts with saved variation identity")
                     return profile
+            except ValueError:
+                raise
             except Exception as e:
-                logger.error(f"[COMPOSER] Could not load variation profile, regenerating: {e}")
-        profile = cls.generate(seed_source, ai_name=ai_name, mode=mode)
+                # Do not regenerate an existing identity on damaged storage.
+                raise RuntimeError("Saved variation profile unreadable; recovery required") from e
+        profile = cls.generate(seed_source, ai_name=ai_name, mode=mode,
+                               birth_record=birth_record)
         profile.save(storage_dir)
         logger.info(f"[COMPOSER] New variation profile: {profile.primary.value}/"
                     f"{profile.secondary.value} multipliers={profile.ability_multipliers}")
@@ -493,7 +496,8 @@ class LearnedResponseComposer:
                  audio=None, vision=None,
                  seed_lines: Optional[Callable[[str, str], List[str]]] = None,
                  rng: Optional[random.Random] = None,
-                 ai_name: str = "", behavior_mode: str = ""):
+                 ai_name: str = "", behavior_mode: str = "",
+                 birth_record=None):
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         self.lexicon = lexicon
@@ -504,7 +508,8 @@ class LearnedResponseComposer:
         self.rng = rng or random.Random()
 
         self.profile = AIVariationProfile.load_or_create(
-            self.storage_dir, seed_source, ai_name=ai_name, mode=behavior_mode)
+            self.storage_dir, seed_source, ai_name=ai_name, mode=behavior_mode,
+            birth_record=birth_record)
         self.memory = ConversationalMemory()
         self.wisdom = ExpressionWisdomStore()
         self.move_fitness: Dict[str, float] = {m: 0.5 for m in MOVE_BASE_WEIGHT}
