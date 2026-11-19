@@ -39,6 +39,7 @@ jobs:
               "tests.test_live_app_contract",
               "tests.test_live_screens",
               "tests.test_real_engine_smoke",
+              "tests.test_unified_birth",
               "tests.agora_integration_test",
           )
           suite = unittest.defaultTestLoader.loadTestsFromNames(names)
