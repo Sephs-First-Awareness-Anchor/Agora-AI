@@ -37,7 +37,7 @@ class TestResponsiveScreens(unittest.TestCase):
             child.text for child in screen.content.children
             if hasattr(child,"text")
         ]
-        self.assertTrue(any("Pick your favorite color" in t for t in labels))
+        self.assertTrue(any("Your favorite color" in t for t in labels))
         self.assertFalse(any("Hi, Poedex" in t for t in labels))
         self.assertEqual(screen.current_step, 1)
 
