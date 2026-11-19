@@ -10,6 +10,7 @@ from kivy.clock import Clock
 
 from app.ui.screens.companion import CompanionScreen
 from app.ui.screens.onboarding import OnboardingScreen
+from app.ui.screens.name_enrollment import NameEnrollmentScreen
 
 
 class FakeRuntime:
@@ -76,13 +77,52 @@ class TestRestoredOnboarding(unittest.TestCase):
         screen._next_from_mode()
         screen.user_name_input.text = "Tester"
         screen.birthday_input.text = "July 31"
-        screen._next_from_user()
-        receiver = SimpleNamespace(begin_name_enrollment=Mock())
+        receiver = SimpleNamespace(begin_name_enrollment=Mock(),
+                                   finish_name_enrollment=Mock())
         with patch("app.ui.screens.onboarding.App.get_running_app", return_value=receiver):
+            screen._next_from_user()
+            # Voice comes before the meeting screen; don't commit here.
+            self.assertEqual(screen.current_step, 3)
+            receiver.begin_name_enrollment.assert_called_once_with(
+                user_name="Tester", ai_name="Sunni", favorite_color="green",
+                mode="extrovert", birthday="July 31")
+            screen._show_step(4)
             screen._complete_onboarding()
-        receiver.begin_name_enrollment.assert_called_once_with(
-            user_name="Tester", ai_name="Sunni", favorite_color="green",
-            mode="extrovert", birthday="July 31")
+        receiver.finish_name_enrollment.assert_called_once_with()
+
+
+class TestVoiceBeforeMeeting(unittest.TestCase):
+    def test_enrollment_finishes_by_showing_meeting_screen_not_birth(self):
+        screen = NameEnrollmentScreen(name="name_enrollment")
+        intro = Mock()
+        manager = SimpleNamespace(current="name_enrollment")
+        session = SimpleNamespace(
+            data={"samples":{"user_name":[1,2,3],"ai_name":[1,2,3]},
+                  "identity":{"ai_name":"Poedex","user_name":"Sunni"}},
+            next_target=lambda:None,
+            ready=lambda:True)
+        app = SimpleNamespace(
+            get_pending_enrollment=lambda:session,
+            onboarding_screen=SimpleNamespace(_show_step=intro),
+            screen_manager=manager)
+        with patch("app.ui.screens.name_enrollment.App.get_running_app", return_value=app):
+            screen.refresh()
+            self.assertFalse(screen.finish_button.disabled)
+            screen.finish()
+        intro.assert_called_once_with(4)
+        self.assertEqual(manager.current, "onboarding")
+
+    def test_recording_error_wraps_in_readable_status(self):
+        screen = NameEnrollmentScreen(name="name_enrollment")
+        session = SimpleNamespace(
+            data={"samples":{"user_name":[],"ai_name":[]},
+                  "identity":{"ai_name":"Poedex","user_name":"Sunni"}},
+            next_target=lambda:"user_name")
+        app = SimpleNamespace(get_pending_enrollment=lambda:session)
+        with patch("app.ui.screens.name_enrollment.App.get_running_app", return_value=app):
+            screen._capture_finished("Microphone permission denied")
+        self.assertIn("Microphone error", screen.status.text)
+        self.assertIn("permission", screen.status.text)
 
 
 if __name__ == "__main__":
