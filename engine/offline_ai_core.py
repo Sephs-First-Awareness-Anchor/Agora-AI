@@ -1117,8 +1117,9 @@ class OfflineAI:
         if not self.conversation_active:
             self.start_conversation()
 
+        # Runtime Authority owns speech state. No independent core flag.
         # Interruption Detection
-        if self.is_speaking:
+        if self.runtime is not None and getattr(self.runtime, "speech_in_progress", False):
             logger.info("[OFFLINE AI] Interruption detected!")
             self.emote_system.trigger_interrupt_reaction()
             # In a real system, we might want to stop TTS here
