@@ -178,24 +178,34 @@ class OnboardingScreen(Screen):
             Color(0.05, 0.05, 0.08, 1)
             self.bg_rect = RoundedRectangle(pos=self.pos, size=Window.size)
         
-        # Content container
+        # Content can exceed the viewport when Android font scaling, screen
+        # height or the keyboard changes. Never clip fields or navigation.
+        self.scroll = ScrollView(size_hint=(1, 1), do_scroll_x=False,
+                                 bar_width=dp(4))
         self.content = BoxLayout(
             orientation='vertical',
-            padding=[30, 50, 30, 30],
-            spacing=20,
-            size_hint=(1, 1)
+            padding=[dp(18), dp(24), dp(18), dp(26)],
+            spacing=dp(14),
+            size_hint=(1, None),
         )
-        
-        # Show first step
-        self._show_step(0)
-        
-        self.main_layout.add_widget(self.content)
+        self.content.bind(minimum_height=self._fit_content)
+        self.scroll.bind(height=self._fit_content)
+        self.scroll.add_widget(self.content)
+        self.main_layout.add_widget(self.scroll)
         self.add_widget(self.main_layout)
+
+        # The content can scroll vertically on small screens.
+        self._show_step(0)
+
+    def _fit_content(self, *args):
+        self.content.height = max(
+            self.content.minimum_height, self.scroll.height - dp(4))
     
     def _show_step(self, step: int):
         """Show a specific onboarding step"""
         self.content.clear_widgets()
         self.current_step = step
+        self.scroll.scroll_y = 1
         
         if step == 0:
             self._build_step_welcome()
@@ -296,7 +306,7 @@ class OnboardingScreen(Screen):
         
         # Title
         title = Label(
-            text=f"[b]Hi, {self.ai_name}![/b]",
+            text="[b]Pick your favorite color[/b]",
             font_size='28sp',
             markup=True,
             size_hint_y=None,
@@ -307,7 +317,7 @@ class OnboardingScreen(Screen):
         
         # Instruction
         instruction = Label(
-            text="Pick a color that resonates with you",
+            text=f"This helps shape {self.ai_name}'s first impressions",
             font_size='16sp',
             size_hint_y=None,
             height=40,
@@ -619,7 +629,7 @@ class OnboardingScreen(Screen):
         
         # Begin button
         begin_btn = Button(
-            text=f'Summon {self.ai_name}',
+            text=f'Meet {self.ai_name}',
             font_size='20sp',
             size_hint=(1, None),
             height=60,
@@ -641,7 +651,8 @@ class OnboardingScreen(Screen):
             background_normal='',
             color=(0.6, 0.6, 0.7, 1)
         )
-        back_btn.bind(on_release=lambda x: self._show_step(3))
+        back_btn.bind(on_release=lambda x: setattr(
+            App.get_running_app().screen_manager, 'current', 'name_enrollment'))
         self.content.add_widget(back_btn)
     
     def _select_color(self, color: str):
@@ -691,15 +702,19 @@ class OnboardingScreen(Screen):
         
         self.user_name = name
         self.birthday = birthday
-        self._show_step(4)
+        app = App.get_running_app()
+        try:
+            # First learn the two spoken names. The meeting screen belongs
+            # AFTER six valid recordings, not before them.
+            app.begin_name_enrollment(
+                user_name=self.user_name, ai_name=self.ai_name,
+                favorite_color=self.favorite_color, mode=self.mode,
+                birthday=self.birthday)
+        except Exception as error:
+            app._show_error_popup(f"Could not begin name recordings: {error}")
     
     def _complete_onboarding(self, *args):
         """Complete onboarding and launch companion"""
         app = App.get_running_app()
-        app.begin_name_enrollment(
-            user_name=self.user_name,
-            ai_name=self.ai_name,
-            favorite_color=self.favorite_color,
-            mode=self.mode,
-            birthday=self.birthday
-        )
+        # The final introduction is shown only after voice enrollment.
+        app.finish_name_enrollment()
