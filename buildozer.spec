@@ -34,7 +34,7 @@ version = 0.1.1
 # comma separated e.g. requirements = sqlite3,kivy
 # Kivy 2.x compiles only with Cython 3.0, which cannot target Python 3.14,
 # so the app's Python stays on 3.13 while the Android target is API 36.
-requirements = python3==3.13.18,hostpython3==3.13.18,kivy==2.3.1,kivymd==1.2.0,numpy,cryptography,pillow,pyjnius
+requirements = python3==3.13.18,hostpython3==3.13.18,kivy==2.3.1,kivymd==1.2.0,numpy,pillow,pyjnius
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
