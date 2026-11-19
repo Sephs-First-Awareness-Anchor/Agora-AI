@@ -12,6 +12,7 @@ from datetime import date, datetime, timezone
 from itertools import combinations
 from pathlib import Path
 from typing import Dict, Mapping, Optional
+import tempfile
 import hashlib
 import json
 import math
@@ -348,12 +349,22 @@ class BirthStore:
         data=decision.to_dict()
         data["committed_at"]=datetime.now(timezone.utc).isoformat()
         encoded=json.dumps(data,indent=2,sort_keys=True).encode("utf-8")
+        # Write the complete record first; atomically hard-link it into the
+        # final path with no replacement allowed. A crash cannot leave a
+        # half-written birth file or overwrite an already committed identity.
+        fd,temp=tempfile.mkstemp(prefix=".agora-birth-",dir=str(self.path.parent))
         try:
-            fd=os.open(str(self.path),os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
-        except FileExistsError:
-            return self.read()
-        with os.fdopen(fd,"wb") as handle:
-            handle.write(encoded)
-            handle.flush()
-            os.fsync(handle.fileno())
+            with os.fdopen(fd,"wb") as handle:
+                handle.write(encoded)
+                handle.flush()
+                os.fsync(handle.fileno())
+            try:
+                os.link(temp,self.path)
+            except FileExistsError:
+                return self.read()
+        finally:
+            try:
+                os.unlink(temp)
+            except FileNotFoundError:
+                pass
         return data
