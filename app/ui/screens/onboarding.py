@@ -306,7 +306,7 @@ class OnboardingScreen(Screen):
         
         # Title
         title = Label(
-            text="[b]Pick your favorite color[/b]",
+            text="[b]Your favorite color[/b]",
             font_size='28sp',
             markup=True,
             size_hint_y=None,
@@ -317,12 +317,18 @@ class OnboardingScreen(Screen):
         
         # Instruction
         instruction = Label(
-            text=f"This helps shape {self.ai_name}'s first impressions",
+            text=f"A small influence on {self.ai_name}'s beginnings",
             font_size='16sp',
             size_hint_y=None,
             height=40,
             color=(0.8, 0.8, 0.8, 1)
         )
+        instruction.halign = 'center'
+        instruction.valign = 'middle'
+        instruction.bind(width=lambda w, width: setattr(
+            w, 'text_size', (max(dp(90), width - dp(12)), None)))
+        instruction.bind(texture_size=lambda w, size: setattr(
+            w, 'height', max(dp(40), size[1] + dp(12))))
         self.content.add_widget(instruction)
         
         # Color grid
@@ -611,6 +617,12 @@ class OnboardingScreen(Screen):
             height=40,
             color=(0.9, 0.9, 0.9, 1)
         )
+        summary.halign = 'center'
+        summary.valign = 'middle'
+        summary.bind(width=lambda w, width: setattr(
+            w, 'text_size', (max(dp(90), width - dp(16)), None)))
+        summary.bind(texture_size=lambda w, size: setattr(
+            w, 'height', max(dp(40), size[1] + dp(14))))
         self.content.add_widget(summary)
         
         # Details
