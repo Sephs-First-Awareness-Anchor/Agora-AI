@@ -641,13 +641,7 @@ class OfflineAIRuntime:
             )
             self.ai.summon(trigger, profile=profile)
         
-        # Intro is handled by AI.summon() via run_intro() - don't call twice
-        if not is_first_boot:
-            greeting = f"Hello again! I'm {self.ai_name}."
-            # Defer speech slightly to give TTS time to initialize
-            def _deferred_speak(dt):
-                self._speak_text(greeting)
-            schedule_once(_deferred_speak, 0.5)
+        # Intro/return greeting belongs to AI.summon, not two separate speakers.
     
     def dismiss(self) -> bool:
         """Dismiss the AI."""
