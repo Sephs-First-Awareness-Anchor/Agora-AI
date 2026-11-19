@@ -45,7 +45,8 @@ jobs:
           suite = unittest.defaultTestLoader.loadTestsFromNames(names)
           with open("preapp-results.txt", "w", encoding="utf-8") as report:
               result = unittest.TextTestRunner(stream=report, verbosity=2).run(suite)
+          with open("preapp-results.txt", "r", encoding="utf-8") as report:
+              print(report.read())
           if result.testsRun < 30 or not result.wasSuccessful():
               raise SystemExit(1)
           PY
-          cat preapp-results.txt
