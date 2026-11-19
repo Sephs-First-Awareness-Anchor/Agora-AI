@@ -775,45 +775,57 @@ class AudioEngine:
     
     def capture_name_pcm(self, duration_seconds: float = 1.8,
                          sample_rate: int = 16000) -> bytes:
-        """Runtime AudioEngine owns exclusive short PCM capture for enrollment.
+        """Capture genuine PCM16 from Android, without a second audio engine.
 
-        Caller runs this blocking method in a worker thread. This is not
-        Android ASR text, nor an invented acoustic fingerprint. Recognition
-        stays stopped until the recording has been released.
+        Run on a worker thread only. Android AudioRecord's ByteBuffer
+        overload avoids importing a nonexistent `jnius.jarray` helper.
+        No audio files or text-derived acoustic signatures are created.
         """
         if not (IS_ANDROID and JNIUS_AVAILABLE):
-            raise RuntimeError("Actual PCM enrollment needs Android microphone hardware")
-        if not .4 <= duration_seconds <= 3.0:
-            raise ValueError("Enrollment capture must remain short")
+            raise RuntimeError("Microphone capture requires Android audio support")
+        if not 0.4 <= duration_seconds <= 3.0:
+            raise ValueError("Enrollment recordings must be 0.4–3 seconds")
         self.stop_listening()
-        from jnius import autoclass, jarray
-        Recorder = autoclass("android.media.AudioRecord")
-        Format = autoclass("android.media.AudioFormat")
+        from jnius import autoclass
+        AudioRecord = autoclass("android.media.AudioRecord")
+        AudioFormat = autoclass("android.media.AudioFormat")
         Source = autoclass("android.media.MediaRecorder$AudioSource")
-        frame = sample_rate * int(duration_seconds * 10) // 10
-        min_bytes = Recorder.getMinBufferSize(
-            sample_rate, Format.CHANNEL_IN_MONO, Format.ENCODING_PCM_16BIT)
-        if min_bytes <= 0:
-            raise RuntimeError("Microphone PCM16 configuration unavailable")
-        chunk_size = max(int(min_bytes), 2048)
-        recorder = Recorder(Source.MIC, sample_rate, Format.CHANNEL_IN_MONO,
-                            Format.ENCODING_PCM_16BIT, chunk_size * 2)
-        if recorder.getState() != Recorder.STATE_INITIALIZED:
+        ByteBuffer = autoclass("java.nio.ByteBuffer")
+        minimum = AudioRecord.getMinBufferSize(
+            sample_rate, AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT)
+        if minimum <= 0:
+            raise RuntimeError("This microphone cannot capture 16-bit PCM at 16 kHz")
+        chunk_size = max(int(minimum), 4096)
+        if chunk_size % 2:
+            chunk_size += 1
+        recorder = AudioRecord(
+            Source.MIC, sample_rate, AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT, chunk_size * 2)
+        if recorder.getState() != AudioRecord.STATE_INITIALIZED:
             recorder.release()
-            raise RuntimeError("Microphone initialization failed or permission denied")
-        wanted = max(1, int(sample_rate * duration_seconds) * 2)
+            raise RuntimeError("Microphone unavailable or audio permission denied")
+        wanted = int(sample_rate * duration_seconds) * 2
         collected = bytearray()
+        buffer = ByteBuffer.allocateDirect(chunk_size)
         try:
             recorder.startRecording()
-            if recorder.getRecordingState() != Recorder.RECORDSTATE_RECORDING:
-                raise RuntimeError("Microphone refused to start recording")
-            buffer = jarray("b")(chunk_size)
+            if recorder.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING:
+                raise RuntimeError("Android could not start the microphone")
             while len(collected) < wanted:
-                n = int(recorder.read(buffer, 0,
-                       min(chunk_size, wanted - len(collected))))
-                if n <= 0:
-                    raise RuntimeError("AudioRecord returned an invalid PCM frame")
-                collected.extend((int(buffer[i]) & 255) for i in range(n))
+                remaining = wanted - len(collected)
+                count = min(chunk_size, remaining)
+                buffer.clear()
+                # A direct ByteBuffer selects AudioRecord.read(ByteBuffer,int,int).
+                # The ByteBuffer position is not advanced by Android's read.
+                amount = int(recorder.read(buffer, count, AudioRecord.READ_BLOCKING))
+                if amount <= 0:
+                    raise RuntimeError(f"Microphone stopped while recording ({amount})")
+                buffer.position(0)
+                data = bytearray(amount)
+                # PyJNIus copies mutated Java byte[] values into bytearray.
+                buffer.get(data, 0, amount)
+                collected.extend(data)
         finally:
             try:
                 recorder.stop()
