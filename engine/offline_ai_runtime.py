@@ -640,6 +640,8 @@ class OfflineAIRuntime:
                 mode="extrovert" if self.mode == InteractionMode.EXTROVERT else "introvert",
                 wake_phrase=trigger
             )
+            profile.birth_record = getattr(getattr(self.ai, "onboarding_profile", None),
+                                           "birth_record", None)
             self.ai.summon(trigger, profile=profile)
         
         # Intro/return greeting belongs to AI.summon, not two separate speakers.
@@ -1145,49 +1147,18 @@ class OfflineAIRuntime:
         if self.state == AIRuntimeState.SPEAKING:
             self._handle_interruption()
         
-        # Extract simulated signals from text characteristics
-        text_hash = hash(text)
-        audio_signal = AudioSignal(
-            pitch=0.5 + (text_hash % 100) / 200.0,
-            tempo=0.6,
-            volume=0.7,
-            phonetic_signature=self._extract_phonetic_signature(text),
-            voice_fingerprint=self._extract_voice_fingerprint(text),
-            timestamp=time.time()
-        )
-        
-        # Route all signals
-        self.process_audio_prosody(audio_signal)
-        
-        if audio_signal.phonetic_signature:
-            phonetic_signal = PhoneticSignal(
-                signature=audio_signal.phonetic_signature,
-                text_content=text,
-                intent=None  # Will be determined by AI
-            )
-            self.process_phonetic_signature(phonetic_signal)
-        
-        if audio_signal.voice_fingerprint:
-            self.process_voice_recognition(audio_signal.voice_fingerprint, text)
-        
+        # Android SpeechRecognizer supplies a transcript, NOT raw PCM.
+        # In particular, never fabricate pitch, phonemes, or a speaker
+        # fingerprint from a text hash or the current time.
         self._process_text_input(text)
-    
-    def _extract_phonetic_signature(self, text: str) -> str:
-        """Extract simplified phonetic signature from text."""
-        # Simplified - would use actual audio features
-        words = text.lower().split()
-        if not words:
-            return "vowel_mid"
-        
-        # Characterize by first letters of words
-        sig = "".join([w[0] for w in words[:3] if w])
-        return f"sig_{sig}" if sig else "vowel_mid"
-    
-    def _extract_voice_fingerprint(self, text: str) -> str:
-        """Extract voice fingerprint - simulated."""
-        # In real implementation, this comes from audio analysis
-        import hashlib
-        return hashlib.md5(f"voice_{time.time() // 60}".encode()).hexdigest()[:16]
+
+    def _extract_phonetic_signature(self, text: str):
+        """Transcript-only callback has no acoustic phonetic signature."""
+        return None
+
+    def _extract_voice_fingerprint(self, text: str):
+        """A spoken name or ASR transcript cannot establish speaker identity."""
+        return None
     
     def _on_speech_complete(self) -> None:
         """Handle TTS completion."""
@@ -1282,13 +1253,12 @@ class OfflineAIRuntime:
                 return
             
             # Update phonetic signal with determined intent
-            if hasattr(self.ai, 'audio') and analysis.get('language', {}).get('intent'):
-                phonetic_signal = PhoneticSignal(
-                    signature=self._extract_phonetic_signature(text),
+            signature = self._extract_phonetic_signature(text)
+            if signature and hasattr(self.ai, "audio") and analysis.get("language",{}).get("intent"):
+                self.process_phonetic_signature(PhoneticSignal(
+                    signature=signature,
                     text_content=text,
-                    intent=analysis['language']['intent']
-                )
-                self.process_phonetic_signature(phonetic_signal)
+                    intent=analysis["language"]["intent"]))
             
             self._generate_response(analysis)
         except Exception as e:
@@ -1435,6 +1405,8 @@ class OfflineAIRuntime:
                     mode="extrovert" if self.mode == InteractionMode.EXTROVERT else "introvert",
                     wake_phrase="come on"
                 )
+                profile.birth_record = getattr(getattr(self.ai, "onboarding_profile", None),
+                                               "birth_record", None)
                 self.ai.run_intro(profile)
             except Exception as e:
                 logger.error(f"[RUNTIME] Intro error: {e}")
