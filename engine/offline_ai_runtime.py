@@ -1558,7 +1558,8 @@ def create_runtime(ai, screen, interaction_mode: str = "introvert",
     """Create and boot Runtime."""
     mode = InteractionMode.EXTROVERT if interaction_mode.lower() == "extrovert" else InteractionMode.INTROVERT
     ui_adapter = AIRuntimeUIAdapter(screen)
-    runtime = OfflineAIRuntime(ai, ui_adapter, mode, language, enable_vision, enable_corpus)
+    runtime = OfflineAIRuntime(ai, ui_adapter, mode, language, enable_vision,
+                               enable_corpus, audio_engine=audio_engine)
     runtime.boot()
     ai.runtime = runtime
     return runtime
