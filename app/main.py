@@ -611,6 +611,7 @@ class KOCompanionApp(App):
                 birth_profile.birth_record = BirthStore(
                     self.factory.storage_dir / account_id).read()
                 self.birth_record=birth_profile.birth_record
+                birth_profile.legacy_identity = self.birth_record is None
                 if self.birth_record and self.birth_record["mode"] != self.mode:
                     self.mode = self.birth_record["mode"]
                     birth_profile.mode = self.mode
