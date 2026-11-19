@@ -45,6 +45,8 @@ from .agora_sync.offline_ai_capabilities import (
     DEFAULT_GAIN_MULTIPLIERS,
     SpecializationProfile,
     SpecializationType,
+    onboarding_specialization,
+    onboarding_letter,
 )
 from .perception.wisdom import ExpressionWisdomStore, WisdomShard
 
@@ -249,7 +251,10 @@ class AIVariationProfile:
 
     def __init__(self, primary: SpecializationType, secondary: SpecializationType,
                  ability_multipliers: Dict[str, float],
-                 personality_offsets: Dict[str, float], seed: str):
+                 personality_offsets: Dict[str, float], seed: str,
+                 onboarding_name: str = "", behavior_mode: str = ""):
+        self.onboarding_name = onboarding_name
+        self.behavior_mode = behavior_mode
         self.primary = primary
         self.secondary = secondary
         self.ability_multipliers = ability_multipliers
@@ -257,26 +262,48 @@ class AIVariationProfile:
         self.seed = seed
 
     @classmethod
-    def generate(cls, seed_source: str) -> "AIVariationProfile":
+    def generate(cls, seed_source: str, ai_name: str = "",
+                 mode: str = "") -> "AIVariationProfile":
         seed = hashlib.sha256(f"agora-variation:{seed_source}".encode()).hexdigest()
         rng = random.Random(seed)
-        roster = list(SpecializationType)
-        primary = rng.choice(roster)
-        secondary = rng.choice([s for s in roster if s != primary] or roster)
+        if ai_name and mode:
+            birth = onboarding_specialization(ai_name, mode)
+            primary, secondary = birth.primary, birth.secondary
+        else:
+            # Standalone/headless legacy callers have no onboarding identity.
+            roster = list(SpecializationType)
+            primary = rng.choice(roster)
+            secondary = rng.choice([s for s in roster if s != primary] or roster)
         multipliers = {d: round(rng.uniform(*ABILITY_MULTIPLIER_RANGE), 3) for d in LEARNING_DOMAINS}
         offsets = {t: round(rng.uniform(*PERSONALITY_OFFSET_RANGE), 3) for t in PERSONALITY_TRAITS}
-        return cls(primary, secondary, multipliers, offsets, seed)
+        return cls(primary, secondary, multipliers, offsets, seed,
+                   onboarding_name=ai_name, behavior_mode=mode)
 
     @classmethod
-    def load_or_create(cls, storage_dir: Path, seed_source: str) -> "AIVariationProfile":
+    def load_or_create(cls, storage_dir: Path, seed_source: str,
+                       ai_name: str = "", mode: str = "") -> "AIVariationProfile":
         path = Path(storage_dir) / cls.FILE_NAME
         if path.exists():
             try:
                 with open(path, "r") as f:
-                    return cls.from_dict(json.load(f))
+                    profile = cls.from_dict(json.load(f))
+                    # Upgrade an existing pre-onboarding random specialization
+                    # once, preserving learned material and personalized offsets.
+                    if ai_name and mode and not profile.onboarding_name:
+                        born = onboarding_specialization(ai_name, mode)
+                        profile.primary, profile.secondary = born.primary, born.secondary
+                        profile.onboarding_name = ai_name
+                        profile.behavior_mode = mode
+                        profile.save(storage_dir)
+                    elif ai_name and mode and (
+                        onboarding_letter(profile.onboarding_name) != onboarding_letter(ai_name)
+                        or profile.behavior_mode != mode
+                    ):
+                        logger.warning("[COMPOSER] Birth identity already bound; ignoring later mismatch")
+                    return profile
             except Exception as e:
                 logger.error(f"[COMPOSER] Could not load variation profile, regenerating: {e}")
-        profile = cls.generate(seed_source)
+        profile = cls.generate(seed_source, ai_name=ai_name, mode=mode)
         profile.save(storage_dir)
         logger.info(f"[COMPOSER] New variation profile: {profile.primary.value}/"
                     f"{profile.secondary.value} multipliers={profile.ability_multipliers}")
@@ -291,7 +318,8 @@ class AIVariationProfile:
             logger.error(f"[COMPOSER] Could not save variation profile: {e}")
 
     def specialization_profile(self) -> SpecializationProfile:
-        return SpecializationProfile(primary=self.primary, secondary=self.secondary)
+        return SpecializationProfile(primary=self.primary, secondary=self.secondary,
+                                     behavior_mode=self.behavior_mode or "introvert")
 
     def gain_vector(self) -> Dict[str, float]:
         """Specialization gains (60/40 blend) scaled by this AI's random multipliers."""
@@ -311,6 +339,8 @@ class AIVariationProfile:
         return {
             "primary": self.primary.value,
             "secondary": self.secondary.value,
+            "onboarding_name": self.onboarding_name,
+            "behavior_mode": self.behavior_mode,
             "ability_multipliers": self.ability_multipliers,
             "personality_offsets": self.personality_offsets,
             "seed": self.seed,
@@ -324,6 +354,8 @@ class AIVariationProfile:
             {d: float(v) for d, v in data.get("ability_multipliers", {}).items()},
             {t: float(v) for t, v in data.get("personality_offsets", {}).items()},
             data.get("seed", ""),
+            onboarding_name=data.get("onboarding_name", ""),
+            behavior_mode=data.get("behavior_mode", ""),
         )
 
 
@@ -460,7 +492,8 @@ class LearnedResponseComposer:
     def __init__(self, storage_dir: str, seed_source: str, lexicon=None, evolution=None,
                  audio=None, vision=None,
                  seed_lines: Optional[Callable[[str, str], List[str]]] = None,
-                 rng: Optional[random.Random] = None):
+                 rng: Optional[random.Random] = None,
+                 ai_name: str = "", behavior_mode: str = ""):
         self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         self.lexicon = lexicon
@@ -470,7 +503,8 @@ class LearnedResponseComposer:
         self.seed_lines = seed_lines
         self.rng = rng or random.Random()
 
-        self.profile = AIVariationProfile.load_or_create(self.storage_dir, seed_source)
+        self.profile = AIVariationProfile.load_or_create(
+            self.storage_dir, seed_source, ai_name=ai_name, mode=behavior_mode)
         self.memory = ConversationalMemory()
         self.wisdom = ExpressionWisdomStore()
         self.move_fitness: Dict[str, float] = {m: 0.5 for m in MOVE_BASE_WEIGHT}
@@ -744,7 +778,7 @@ class LearnedResponseComposer:
         if self._last is not None:
             self._last["implicit"] = self._implicit_satisfaction(intent, user_text)
             if self._last["implicit"] is not None:
-                self.record_feedback(self._last["implicit"])
+                self.record_feedback(self._last["implicit"], explicit=False)
         gains = self.profile.gain_vector()
         self.memory.observe_surface(user_text)
         topics = self.topics_in(user_text)
@@ -765,14 +799,14 @@ class LearnedResponseComposer:
             return 0.6
         return None
 
-    def record_feedback(self, satisfaction: float):
-        """Feedback on the last reply: adjusts move fitness and learns successful templates."""
+    def record_feedback(self, satisfaction: float, explicit: bool = True):
+        """Score feedback; only explicit endorsement promotes reply templates."""
         if not self._last:
             return
         move = self._last["move"]
         old = self.move_fitness.get(move, 0.5)
         self.move_fitness[move] = round(old + MOVE_FITNESS_LR * (satisfaction - old), 4)
-        if (satisfaction >= TEMPLATE_SUCCESS_THRESHOLD and self.evolution
+        if (explicit and satisfaction >= TEMPLATE_SUCCESS_THRESHOLD and self.evolution
                 and move not in ("seed_line", "curiosity_probe")):
             slot_values = dict(self._last.get("slots") or {})
             filled = set(slot_values.values())
