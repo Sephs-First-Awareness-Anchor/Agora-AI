@@ -140,8 +140,8 @@ class TestOnboarding52(unittest.TestCase):
                 root, "legacy", ai_name="Max", mode="introvert")
             self.assertEqual(migrated.personality_offsets, original_offsets)
             self.assertEqual(migrated.ability_multipliers, previous_multipliers)
-            self.assertEqual(migrated.primary,
-                             onboarding_specialization("Max", "introvert").primary)
+            self.assertEqual(migrated.primary, previous.primary)
+            self.assertEqual(migrated.secondary, previous.secondary)
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
