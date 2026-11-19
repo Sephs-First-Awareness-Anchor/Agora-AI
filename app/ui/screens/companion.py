@@ -175,7 +175,7 @@ class CompanionScreen(Screen):
         
         # Mic button
         self.mic_btn = Button(
-            text='Hold to Speak',
+            text='Tap to Speak',
             font_size=dp(14),
             bold=True,
             background_color=(0.9, 0.3, 0.4, 1),
