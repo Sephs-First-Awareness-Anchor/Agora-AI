@@ -168,6 +168,17 @@ class OfflineAI:
             logger.error(f"[OFFLINE AI] Failed to create storage directory {storage_dir}: {e}")
 
         self.safe_mode = safe_mode
+        # A newly onboarded companion cannot initialize learning until the
+        # six real acoustic observations have produced one committed birth.
+        # Existing accounts use an explicit legacy path, never a silent rebirth.
+        if onboarding_profile is not None:
+            born = getattr(onboarding_profile, "birth_record", None)
+            legacy = getattr(onboarding_profile, "legacy_identity", False)
+            if born is None and not legacy:
+                raise ValueError("PENDING_ENROLLMENT: no immutable birth committed")
+            self.birth_state = "BIRTH_COMMITTED" if born else "LEGACY_EXISTING"
+        else:
+            self.birth_state = "HEADLESS_COMPATIBILITY"
         self.onboarding_profile = onboarding_profile
         self.user_name = onboarding_profile.user_name if onboarding_profile else "User"
         self.favorite_color = onboarding_profile.favorite_color if onboarding_profile else "blue"
