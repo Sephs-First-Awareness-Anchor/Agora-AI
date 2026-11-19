@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 class SpecializationType(Enum):
-    """52-roster specializations with learning gain multipliers."""
+    """13 base aptitudes; ordered birth pairs and behavior create 52 profiles."""
     # Creative Domain
     STORYTELLER = "storyteller"      # Narrative, creative expression
     POET = "poet"                    # Linguistic artistry
