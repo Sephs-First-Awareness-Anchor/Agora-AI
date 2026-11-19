@@ -465,13 +465,22 @@ class KOCompanionApp(App):
                     entity_prefix = self.entity_manager.current_entity.entity_id[:8]
                     device_id = f"{entity_prefix}_{device_id}"
                 
+                birth_profile = OnboardingProfile(
+                    user_name=self.user_name or "User",
+                    ai_name=self.ai_name or "KO",
+                    favorite_color=self.favorite_color or "blue",
+                    mode=self.mode or "introvert"
+                )
                 self.ai_instance = self.factory.activate(
                     self.serial_code,
                     device_id=device_id,
-                    device_name=self._get_device_name()
+                    device_name=self._get_device_name(),
+                    onboarding_profile=birth_profile
                 )
 
                 if self.ai_instance:
+                    self.ai_instance.user_name = self.user_name or "User"
+                    self.ai_instance.favorite_color = self.favorite_color or "blue"
                     self.ai_instance.set_mode(extrovert=(self.mode == 'extrovert'))
 
                     # Create Runtime Authority - this is the SINGLE AUTHORITY
