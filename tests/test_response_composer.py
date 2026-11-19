@@ -18,6 +18,9 @@ import unittest
 from pathlib import Path
 
 from engine.offline_ai_expression import LexiconManager, SelfGenerativeEvolution
+from engine.agora_sync.offline_ai_capabilities import (
+    ONBOARDING_SPECIALIZATION_PAIRS, onboarding_specialization, onboarding_letter,
+)
 from engine.offline_ai_response_composer import (
     ABILITY_MULTIPLIER_RANGE, AIVariationProfile, LEARNING_DOMAINS,
     LearnedResponseComposer, generalize_reply,
@@ -86,6 +89,61 @@ class TestVariationProfile(unittest.TestCase):
             self.assertEqual(first.to_dict(), again.to_dict())
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+class TestOnboarding52(unittest.TestCase):
+    def test_all_52_and_reversed_pairs(self):
+        letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        self.assertEqual(set(ONBOARDING_SPECIALIZATION_PAIRS), set(letters))
+        configs = set()
+        for mode in ("introvert", "extrovert"):
+            for index, letter in enumerate(letters):
+                profile = onboarding_specialization(letter + "ria", mode)
+                self.assertEqual(profile.behavior_mode, mode)
+                configs.add((profile.primary, profile.secondary, profile.behavior_mode))
+                if index < 13:
+                    reverse = onboarding_specialization(letters[index + 13] + "ria", mode)
+                    self.assertEqual((profile.primary, profile.secondary),
+                                     (reverse.secondary, reverse.primary))
+        self.assertEqual(len(configs), 52)
+
+    def test_name_first_letter_is_the_original_selection_method(self):
+        self.assertEqual(onboarding_letter("Sunni"), "S")
+        self.assertEqual(onboarding_letter("sapphire"), "S")
+        self.assertEqual(onboarding_letter("1"), "B")
+        first = onboarding_specialization("Sunni", "introvert")
+        second = onboarding_specialization("sapphire", "introvert")
+        self.assertEqual((first.primary, first.secondary),
+                         (second.primary, second.secondary))
+        with self.assertRaises(ValueError):
+            onboarding_specialization("Sunni", "undecided")
+
+    def test_birth_profile_persists(self):
+        root = Path(tempfile.mkdtemp())
+        try:
+            first = AIVariationProfile.load_or_create(
+                root, "account", ai_name="Sunni", mode="extrovert")
+            again = AIVariationProfile.load_or_create(
+                root, "different account", ai_name="Sunni", mode="extrovert")
+            self.assertEqual(first.to_dict(), again.to_dict())
+            self.assertEqual(first.specialization_profile().behavior_mode, "extrovert")
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_legacy_specialization_migrates_without_erasing_aptitude(self):
+        root = Path(tempfile.mkdtemp())
+        try:
+            previous = AIVariationProfile.load_or_create(root, "legacy")
+            original_offsets = dict(previous.personality_offsets)
+            previous_multipliers = dict(previous.ability_multipliers)
+            migrated = AIVariationProfile.load_or_create(
+                root, "legacy", ai_name="Max", mode="introvert")
+            self.assertEqual(migrated.personality_offsets, original_offsets)
+            self.assertEqual(migrated.ability_multipliers, previous_multipliers)
+            self.assertEqual(migrated.primary,
+                             onboarding_specialization("Max", "introvert").primary)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
 
 
 class TestGeneralizeReply(unittest.TestCase):
