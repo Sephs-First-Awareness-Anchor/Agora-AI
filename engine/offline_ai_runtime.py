@@ -370,7 +370,7 @@ class OfflineAIRuntime:
         self.last_state_change = time.time()
         
         # Audio subsystem
-        self.audio = create_audio_engine(language)
+        self.audio = audio_engine if audio_engine is not None else create_audio_engine(language)
         self.audio.on_speech_result = self._on_speech_result
         self.audio.on_speaking_complete = self._on_speech_complete
         
