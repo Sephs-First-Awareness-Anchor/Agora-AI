@@ -186,10 +186,45 @@ class CompanionScreen(Screen):
         self.mic_btn.bind(on_press=self._start_listening)
         self.mic_btn.bind(on_release=self._stop_listening)
         content.add_widget(self.mic_btn)
+
+        erase_voice = Button(text="Delete local voice-learning data",
+                             font_size=dp(12), size_hint_y=None, height=dp(35),
+                             background_color=(0,0,0,0),
+                             color=(0.7,0.7,0.8,1))
+        erase_voice.bind(on_release=self._confirm_voice_erase)
+        content.add_widget(erase_voice)
         
         root.add_widget(content)
         self.add_widget(root)
     
+    def _confirm_voice_erase(self, *args):
+        """Owner-confirmed deletion; birth and its specialization stay frozen."""
+        from kivy.uix.popup import Popup
+        box = BoxLayout(orientation="vertical",padding=16,spacing=12)
+        box.add_widget(Label(
+            text="Remove locally learned name pronunciations and speaker features? "
+                 "Your companion's birth identity and memories stay intact.",
+            text_size=(dp(270),None),halign="center"))
+        actions=BoxLayout(orientation="horizontal",size_hint_y=None,height=dp(48))
+        cancel=Button(text="Keep")
+        erase=Button(text="Erase Voice Data")
+        actions.add_widget(cancel)
+        actions.add_widget(erase)
+        box.add_widget(actions)
+        popup=Popup(title="Voice-data privacy",content=box,
+                    size_hint=(.9,.45),auto_dismiss=True)
+        cancel.bind(on_release=lambda *_:popup.dismiss())
+
+        def confirm(*_):
+            try:
+                App.get_running_app().delete_companion_voice_data()
+                self.status_label.text="Local voice data erased. Birth unchanged."
+            except Exception as exc:
+                self.status_label.text=f"Could not erase voice data: {exc}"
+            popup.dismiss()
+        erase.bind(on_release=confirm)
+        popup.open()
+
     def _add_message(self, text, is_ai=False):
         bubble = BoxLayout(
             orientation='horizontal',
