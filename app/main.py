@@ -34,7 +34,7 @@ from app.entity_manager import EntityManager, EntityIdentity
 # Import core AI modules
 from engine.offline_ai_core import OfflineAIFactory, OfflineAI
 from engine.offline_ai_expression import OnboardingProfile
-from engine.agora_enrollment import EnrollmentSession
+from engine.agora_enrollment import EnrollmentSession, NameLearningStore
 from engine.agora_birth import BirthStore, select_birth
 from engine.offline_ai_audio_engine import create_audio_engine
 logger = logging.getLogger(__name__)
@@ -451,6 +451,10 @@ class KOCompanionApp(App):
                     or self.birth_record["secondary"] != decision.secondary
                     or self.birth_record["mode"] != decision.mode):
                 raise ValueError("Existing committed birth conflicts with enrollment")
+            # Independently mutable, local-only voice and pronunciation data.
+            # This never participates in reselecting the frozen birth record.
+            NameLearningStore(Path(ai_data_path) / account_id).seed_once(
+                identity,sample_result)
             self.serial_code = serial_code
             session.mark_committed(account_id,serial_code)
 
@@ -467,6 +471,22 @@ class KOCompanionApp(App):
         except Exception as e:
             logger.error(f"[APP] Critical failure during onboarding completion: {e}", exc_info=True)
             self._show_error_popup(f"Failed to complete onboarding: {str(e)}")
+            raise
+
+    def delete_companion_voice_data(self):
+        """Owner-initiated deletion affects local acoustic learning, not birth."""
+        if not self.factory or not self.serial_code:
+            raise ValueError("No activated companion")
+        valid,account_id,_=self.factory.account_manager.verify_serial_code(
+            self.serial_code)
+        if not valid:
+            raise ValueError("Cannot verify companion account")
+        NameLearningStore(self.factory.storage_dir/account_id).delete_voice_data()
+        # Provisional enrollment details must also be deleted for privacy.
+        enrollment_file=Path(self.storage_path)/"enrollment"/"pending.json"
+        if enrollment_file.exists() and self.is_onboarded:
+            enrollment_file.unlink()
+        self.enrollment_session=None
 
     def _get_safe_window_width(self):
         """Get window width safely for Android"""
