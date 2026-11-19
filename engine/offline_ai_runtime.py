@@ -1554,7 +1554,7 @@ class OfflineAIRuntime:
 
 def create_runtime(ai, screen, interaction_mode: str = "introvert",
                    language: str = "en-US", enable_vision: bool = True,
-                   enable_corpus: bool = False) -> OfflineAIRuntime:
+                   enable_corpus: bool = False, audio_engine=None) -> OfflineAIRuntime:
     """Create and boot Runtime."""
     mode = InteractionMode.EXTROVERT if interaction_mode.lower() == "extrovert" else InteractionMode.INTROVERT
     ui_adapter = AIRuntimeUIAdapter(screen)
