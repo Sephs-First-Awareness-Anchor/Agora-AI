@@ -229,3 +229,81 @@ class EnrollmentSession:
         self.data["birth_account"]={"id":account_id,"serial_code":serial_code}
         self.data["state"]="BIRTH_COMMITTED"
         _write_atomic(self.path,self.data)
+
+
+class NameLearningStore:
+    """Mutable local pronunciation and speaker evidence, separate from birth.
+
+    No voice recognition is used as authentication. New observations must
+    arrive from PCM, never from a transcript or time-derived pseudofingerprint.
+    """
+    def __init__(self, account_dir):
+        self.path=Path(account_dir)/"voice_learning.json"
+        if self.path.exists():
+            self.data=json.loads(self.path.read_text(encoding="utf-8"))
+        else:
+            self.data=None
+
+    def seed_once(self, identity, enrollment_result):
+        if self.data is not None:
+            return self.data
+        self.data={
+            "feature_version":FEATURE_VERSION,
+            "names":{
+                "user_name":{"typed":identity["user_name"],
+                             "pronunciation":enrollment_result["user_pronunciation"]},
+                "ai_name":{"typed":identity["ai_name"],
+                           "pronunciation":enrollment_result["ai_pronunciation"]},
+            },
+            "speakers":{
+                "owner":{"embedding":enrollment_result["provisional_speaker"]["embedding"],
+                         "samples":6, "status":"provisional"}
+            },
+            "raw_recordings_saved":False,
+            "recognition_is_authorization":False,
+        }
+        _write_atomic(self.path,self.data)
+        return self.data
+
+    def observe_pronunciation_pcm(self, target, pcm, sample_rate=SAMPLE_RATE):
+        """Update how names are pronounced without touching immutable birth."""
+        if self.data is None or target not in self.data["names"]:
+            raise ValueError("Pronunciation learning is not initialized")
+        feature=extract_audio_features(pcm,sample_rate)
+        old=self.data["names"][target]["pronunciation"]
+        for k in FEATURES:
+            old[k]=round(.8*old[k]+.2*feature[k],4)
+        old["observations_after_birth"]=old.get("observations_after_birth",0)+1
+        _write_atomic(self.path,self.data)
+        return old
+
+    def classify_speaker_pcm(self, pcm, sample_rate=SAMPLE_RATE):
+        if self.data is None:
+            return ("unknown",0.)
+        features=extract_audio_features(pcm,sample_rate)
+        centroids={k:v["embedding"] for k,v in self.data["speakers"].items()}
+        result, confidence=compare_speaker(features,centroids)
+        if result=="unknown":
+            return ("unknown",confidence)
+        status=self.data["speakers"][result].get("status","provisional")
+        if status!="validated":
+            return ("provisional_"+result,confidence)
+        return ("recognized_"+result,confidence)
+
+    def add_consented_other_speaker(self, label, pcm_samples):
+        """Explicit consenting enrollment; never learn unknown bystanders."""
+        if self.data is None or not label or label=="owner":
+            raise ValueError("Invalid known-speaker enrollment")
+        if len(pcm_samples)<6:
+            raise ValueError("Six consented utterances are needed for a provisional voice")
+        rows=[extract_audio_features(pcm) for pcm in pcm_samples]
+        self.data["speakers"][label]={
+            "embedding":_speaker_embedding(rows),
+            "samples":len(rows),"status":"provisional",
+        }
+        _write_atomic(self.path,self.data)
+
+    def delete_voice_data(self):
+        """Erase mutable features without changing immutable birth identity."""
+        self.path.unlink(missing_ok=True)
+        self.data=None
