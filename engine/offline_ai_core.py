@@ -146,7 +146,8 @@ class OfflineAI:
     def __init__(self, account_id: str, serial_code: str,
                  storage_dir: str = "./offline_ai_data",
                  device_id: str = None, device_name: str = None,
-                 safe_mode: bool = False):
+                 safe_mode: bool = False,
+                 onboarding_profile: Optional[OnboardingProfile] = None):
         """
         Initialize offline AI for a specific account.
         
@@ -167,6 +168,9 @@ class OfflineAI:
             logger.error(f"[OFFLINE AI] Failed to create storage directory {storage_dir}: {e}")
 
         self.safe_mode = safe_mode
+        self.onboarding_profile = onboarding_profile
+        self.user_name = onboarding_profile.user_name if onboarding_profile else "User"
+        self.favorite_color = onboarding_profile.favorite_color if onboarding_profile else "blue"
         self.lifecycle = OfflineAILifecycle.CREATED
         
         # Initialize memory system
@@ -226,7 +230,7 @@ class OfflineAI:
         self.ui_busy = False # True during scene load, animation transition, etc.
 
         # AI Identity (initialized for Runtime)
-        self.ai_name = "Unknown"
+        self.ai_name = onboarding_profile.ai_name if onboarding_profile else "Unknown"
         self.wake_phrase = "come on"
         self.visible = False
         self.current_persona_key = None
@@ -451,6 +455,8 @@ class OfflineAI:
             audio=self.audio,
             vision=self.vision,
             seed_lines=self._seed_lines,
+            ai_name=self.onboarding_profile.ai_name if self.onboarding_profile else "",
+            behavior_mode=self.onboarding_profile.mode if self.onboarding_profile else "",
         )
         profile = self.response_composer.profile
         self.specialization = profile.specialization_profile()
@@ -726,10 +732,8 @@ class OfflineAI:
                 self.affect.arousal += color_bias["arousal"]
                 self.affect.dominance += color_bias["dominance"]
 
-            # Enforce introvert / extrovert compatibility
-            if persona["mode"] != "both" and persona["mode"] != profile.mode:
-                persona = BOOT_PERSONAS["B_WARM"]
-
+            # Original name-led persona applies in either behavioral mode.
+            # Introversion/extroversion affects presentation, not identity.
             # Execute animation sequence
             logger.info(f"[OFFLINE AI] Intro sequence: {persona_key} ({len(persona['lines'])} lines)")
             self.face_animator.animate("alpha", 1.0, 0.3)
@@ -1263,8 +1267,8 @@ class OfflineAI:
         # Autonomy is permanently locked. We ignore extrovert proactivity if it exceeds the hard lock.
         current_autonomy = 0.3 if self.is_extrovert else 0.2
         if current_autonomy > AUTONOMY_PERMANENT:
-             # If extrovert mode would push autonomy above the permanent lock, we throttle it
-             self.is_extrovert = False
+             # Keep the behavioral birth mode intact while clamping autonomy.
+             current_autonomy = AUTONOMY_PERMANENT
 
         # Clamps on curiosity if energy is low
         if energy_status.get("total_energy", 100) < 5.0:
@@ -1808,7 +1812,8 @@ class OfflineAIFactory:
     def activate(self, serial_code: str, 
                 device_id: str = None, 
                 device_name: str = None,
-                safe_mode: bool = False) -> Optional[OfflineAI]:
+                safe_mode: bool = False,
+                onboarding_profile: Optional[OnboardingProfile] = None) -> Optional[OfflineAI]:
         """
         Activate an AI instance with a serial code.
         
@@ -1832,7 +1837,8 @@ class OfflineAIFactory:
             storage_dir=str(self.storage_dir),
             device_id=device_id,
             device_name=device_name,
-            safe_mode=safe_mode
+            safe_mode=safe_mode,
+            onboarding_profile=onboarding_profile
         )
         
         # Track active instance
