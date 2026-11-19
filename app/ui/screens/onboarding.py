@@ -670,7 +670,9 @@ class OnboardingScreen(Screen):
             # TODO: Show error
             return
         
-        self.ai_name = name.capitalize()
+        # Preserve the exact name chosen by the user; pronunciation
+        # enrollment, not English capitalization, determines acoustic identity.
+        self.ai_name = name
         self._show_step(1)
     
     def _next_from_mode(self, *args):
