@@ -773,6 +773,55 @@ class AudioEngine:
         """Check if both subsystems are ready"""
         return self.tts.is_ready and self.recognizer.is_ready
     
+    def capture_name_pcm(self, duration_seconds: float = 1.8,
+                         sample_rate: int = 16000) -> bytes:
+        """Runtime AudioEngine owns exclusive short PCM capture for enrollment.
+
+        Caller runs this blocking method in a worker thread. This is not
+        Android ASR text, nor an invented acoustic fingerprint. Recognition
+        stays stopped until the recording has been released.
+        """
+        if not (IS_ANDROID and JNIUS_AVAILABLE):
+            raise RuntimeError("Actual PCM enrollment needs Android microphone hardware")
+        if not .4 <= duration_seconds <= 3.0:
+            raise ValueError("Enrollment capture must remain short")
+        self.stop_listening()
+        from jnius import autoclass, jarray
+        Recorder = autoclass("android.media.AudioRecord")
+        Format = autoclass("android.media.AudioFormat")
+        Source = autoclass("android.media.MediaRecorder$AudioSource")
+        frame = sample_rate * int(duration_seconds * 10) // 10
+        min_bytes = Recorder.getMinBufferSize(
+            sample_rate, Format.CHANNEL_IN_MONO, Format.ENCODING_PCM_16BIT)
+        if min_bytes <= 0:
+            raise RuntimeError("Microphone PCM16 configuration unavailable")
+        chunk_size = max(int(min_bytes), 2048)
+        recorder = Recorder(Source.MIC, sample_rate, Format.CHANNEL_IN_MONO,
+                            Format.ENCODING_PCM_16BIT, chunk_size * 2)
+        if recorder.getState() != Recorder.STATE_INITIALIZED:
+            recorder.release()
+            raise RuntimeError("Microphone initialization failed or permission denied")
+        wanted = max(1, int(sample_rate * duration_seconds) * 2)
+        collected = bytearray()
+        try:
+            recorder.startRecording()
+            if recorder.getRecordingState() != Recorder.RECORDSTATE_RECORDING:
+                raise RuntimeError("Microphone refused to start recording")
+            buffer = jarray("b")(chunk_size)
+            while len(collected) < wanted:
+                n = int(recorder.read(buffer, 0,
+                       min(chunk_size, wanted - len(collected))))
+                if n <= 0:
+                    raise RuntimeError("AudioRecord returned an invalid PCM frame")
+                collected.extend((int(buffer[i]) & 255) for i in range(n))
+        finally:
+            try:
+                recorder.stop()
+            except Exception:
+                pass
+            recorder.release()
+        return bytes(collected)
+
     # ========================================================================
     # SPEECH RECOGNITION CONTROL (Called by Runtime only)
     # ========================================================================
