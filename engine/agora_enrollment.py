@@ -213,6 +213,14 @@ class EnrollmentSession:
             },
         }
 
+    def stage_account(self,account_id,serial_code):
+        """Checkpoint the account reference before the immutable birth write."""
+        previous=self.data.get("birth_account")
+        if previous and previous["id"]!=account_id:
+            raise ValueError("Account identity already staged")
+        self.data["birth_account"]={"id":account_id,"serial_code":serial_code}
+        _write_atomic(self.path,self.data)
+
     def mark_committed(self,account_id,serial_code):
         if not self.ready():
             raise ValueError("Cannot commit before recordings")
