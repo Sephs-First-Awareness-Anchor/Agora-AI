@@ -357,7 +357,8 @@ class OfflineAIRuntime:
         interaction_mode: InteractionMode = InteractionMode.INTROVERT,
         language: str = "en-US",
         enable_vision: bool = True,
-        enable_corpus_training: bool = False
+        enable_corpus_training: bool = False,
+        audio_engine=None
     ):
         self.ai = ai
         self.ui = ui_adapter
