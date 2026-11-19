@@ -666,7 +666,10 @@ class LearnedResponseComposer:
         for phrase in self.user_phrases(intent):
             variants.append(Variant("user_phrase", phrase, topic))
 
-        for word in self.unknown_words(user_text)[:2]:
+        # A thanks or an apology is answered in kind, never with "X? Tell me
+        # what that is." Probes stay for every other intent.
+        answer_in_kind = all(b in INTENT_TOPIC_FRAMES for b in _base_intents(intent))
+        for word in ([] if answer_in_kind else self.unknown_words(user_text)[:2]):
             for frame in CURIOSITY_FRAMES:
                 text = fill(frame, word=word)
                 if text:

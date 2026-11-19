@@ -17,6 +17,7 @@ ANDROID-FRIENDLY: Uses privacy-compliant device identification
 import json
 import hashlib
 import time
+import uuid
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List

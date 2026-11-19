@@ -30,6 +30,8 @@ from app.ui.screens.purchase import PurchaseScreen
 from app.ui.screens.login import LoginScreen
 from app.auth import AgoraAuth
 from app.entity_manager import EntityManager, EntityIdentity
+from app.crash_guard import install as install_crash_guard
+from app.ui.components.system_insets import keep_clear_of_system_bars
 
 # Import core AI modules
 from engine.offline_ai_core import OfflineAIFactory, OfflineAI
@@ -179,6 +181,9 @@ class KOCompanionApp(App):
         if not self._init_storage():
             logger.warning("[APP] Storage initialization failed, using defaults")
 
+        # Record uncaught callback errors instead of letting Android close the app.
+        install_crash_guard(self, self.storage_path or self.user_data_dir)
+
         # Initialize authentication and entity systems
         if self._storage_initialized:
             self.auth = AgoraAuth(str(self.storage_path))
@@ -243,7 +248,12 @@ class KOCompanionApp(App):
 
         # Wired evolution system disabled for working APK
 
-        return self.screen_manager
+        # Android 15+ draws apps edge to edge; keep every screen clear of the
+        # status and navigation bars.
+        from kivy.uix.boxlayout import BoxLayout
+        root = BoxLayout()
+        root.add_widget(self.screen_manager)
+        return keep_clear_of_system_bars(root)
     
     def _load_config(self):
         """Load saved configuration"""
@@ -480,7 +490,6 @@ class KOCompanionApp(App):
         except Exception as e:
             logger.error(f"[APP] Critical failure during onboarding completion: {e}", exc_info=True)
             self._show_error_popup(f"Failed to complete onboarding: {str(e)}")
-            raise
 
     def delete_companion_voice_data(self):
         """Owner-initiated deletion affects local acoustic learning, not birth."""

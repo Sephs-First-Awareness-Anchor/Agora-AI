@@ -42,6 +42,8 @@ No other module may:
 
 import time
 import logging
+
+from .agora_scheduling import schedule_once as _shared_schedule_once
 from enum import Enum
 from typing import Any, Optional, Callable, Dict, List
 from dataclasses import dataclass
@@ -98,14 +100,11 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 def schedule_once(callback, delay=0):
-    """Safely schedule a callback using Clock or threading fallback."""
-    if Clock is not None:
-        Clock.schedule_once(lambda dt: callback(), delay)
-    else:
-        import threading
-        timer = threading.Timer(delay, callback)
-        timer.daemon = True
-        timer.start()
+    """Safely schedule a callback using Clock or threading fallback.
+
+    Accepts both ``lambda: ...`` and Kivy-style ``lambda dt: ...``.
+    """
+    _shared_schedule_once(callback, delay)
 
 def schedule_interval(callback, interval):
     """Safely schedule a recurring callback using Clock or threading fallback."""

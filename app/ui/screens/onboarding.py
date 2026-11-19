@@ -91,7 +91,7 @@ class ModeToggle(BoxLayout):
         super().__init__(**kwargs)
         self.orientation = 'horizontal'
         self.size_hint_y = None
-        self.height = 60
+        self.height = dp(60)
         self.spacing = 10
         self.padding = [20, 0]
         
@@ -229,7 +229,7 @@ class OnboardingScreen(Screen):
             font_size='32sp',
             markup=True,
             size_hint_y=None,
-            height=50,
+            height=dp(50),
             color=(1, 1, 1, 1)
         )
         self.content.add_widget(title)
@@ -239,7 +239,7 @@ class OnboardingScreen(Screen):
             text="Your own offline AI companion",
             font_size='18sp',
             size_hint_y=None,
-            height=30,
+            height=dp(30),
             color=(0.7, 0.7, 0.7, 1)
         )
         self.content.add_widget(subtitle)
@@ -252,7 +252,7 @@ class OnboardingScreen(Screen):
             text="What would you like to name your companion?",
             font_size='16sp',
             size_hint_y=None,
-            height=40,
+            height=dp(40),
             color=(0.9, 0.9, 0.9, 1)
         )
         self.content.add_widget(instruction)
@@ -263,7 +263,7 @@ class OnboardingScreen(Screen):
             font_size='14sp',
             markup=True,
             size_hint_y=None,
-            height=30,
+            height=dp(30),
             color=(0.5, 0.5, 0.6, 1)
         )
         self.content.add_widget(hint)
@@ -291,7 +291,7 @@ class OnboardingScreen(Screen):
             text='Continue',
             font_size='18sp',
             size_hint=(1, None),
-            height=55,
+            height=dp(55),
             background_color=(0.2, 0.4, 0.8, 1),
             background_normal='',
             color=(1, 1, 1, 1)
@@ -310,7 +310,7 @@ class OnboardingScreen(Screen):
             font_size='28sp',
             markup=True,
             size_hint_y=None,
-            height=50,
+            height=dp(50),
             color=(1, 1, 1, 1)
         )
         self.content.add_widget(title)
@@ -320,7 +320,7 @@ class OnboardingScreen(Screen):
             text=f"A small influence on {self.ai_name}'s beginnings",
             font_size='16sp',
             size_hint_y=None,
-            height=40,
+            height=dp(40),
             color=(0.8, 0.8, 0.8, 1)
         )
         instruction.halign = 'center'
@@ -360,7 +360,7 @@ class OnboardingScreen(Screen):
             text="Ocean Depths",
             font_size='18sp',
             size_hint_y=None,
-            height=40,
+            height=dp(40),
             color=(0.6, 0.8, 1, 1)
         )
         self.content.add_widget(self.color_label)
@@ -369,7 +369,7 @@ class OnboardingScreen(Screen):
         self.content.add_widget(Widget(size_hint_y=0.15))
         
         # Navigation
-        nav = BoxLayout(size_hint_y=None, height=55, spacing=15)
+        nav = BoxLayout(size_hint_y=None, height=dp(55), spacing=dp(15))
         
         back_btn = Button(
             text='Back',
@@ -404,7 +404,7 @@ class OnboardingScreen(Screen):
             font_size='28sp',
             markup=True,
             size_hint_y=None,
-            height=50,
+            height=dp(50),
             color=(1, 1, 1, 1)
         )
         self.content.add_widget(title)
@@ -425,7 +425,7 @@ class OnboardingScreen(Screen):
             font_size='14sp',
             markup=True,
             size_hint_y=None,
-            height=60,
+            height=dp(60),
             color=(0.7, 0.7, 0.8, 1),
             halign='center'
         )
@@ -437,7 +437,7 @@ class OnboardingScreen(Screen):
             font_size='14sp',
             markup=True,
             size_hint_y=None,
-            height=60,
+            height=dp(60),
             color=(0.8, 0.7, 0.6, 1),
             halign='center'
         )
@@ -448,7 +448,7 @@ class OnboardingScreen(Screen):
         self.content.add_widget(Widget(size_hint_y=0.15))
         
         # Navigation
-        nav = BoxLayout(size_hint_y=None, height=55, spacing=15)
+        nav = BoxLayout(size_hint_y=None, height=dp(55), spacing=dp(15))
         
         back_btn = Button(
             text='Back',
@@ -483,7 +483,7 @@ class OnboardingScreen(Screen):
             font_size='28sp',
             markup=True,
             size_hint_y=None,
-            height=50,
+            height=dp(50),
             color=(1, 1, 1, 1)
         )
         self.content.add_widget(title)
@@ -492,7 +492,7 @@ class OnboardingScreen(Screen):
             text=f"So {self.ai_name} knows who you are",
             font_size='16sp',
             size_hint_y=None,
-            height=30,
+            height=dp(30),
             color=(0.7, 0.7, 0.7, 1)
         )
         self.content.add_widget(subtitle)
@@ -505,7 +505,7 @@ class OnboardingScreen(Screen):
             text="Your Name",
             font_size='14sp',
             size_hint_y=None,
-            height=25,
+            height=dp(25),
             color=(0.8, 0.8, 0.8, 1),
             halign='left'
         )
@@ -534,7 +534,7 @@ class OnboardingScreen(Screen):
             text="Your Birthday",
             font_size='14sp',
             size_hint_y=None,
-            height=25,
+            height=dp(25),
             color=(0.8, 0.8, 0.8, 1),
             halign='left'
         )
@@ -560,7 +560,7 @@ class OnboardingScreen(Screen):
         self.content.add_widget(Widget(size_hint_y=0.15))
         
         # Navigation
-        nav = BoxLayout(size_hint_y=None, height=55, spacing=15)
+        nav = BoxLayout(size_hint_y=None, height=dp(55), spacing=dp(15))
         
         back_btn = Button(
             text='Back',
@@ -603,7 +603,7 @@ class OnboardingScreen(Screen):
             font_size='28sp',
             markup=True,
             size_hint_y=None,
-            height=50,
+            height=dp(50),
             color=(1, 1, 1, 1)
         )
         self.content.add_widget(title)
@@ -614,7 +614,7 @@ class OnboardingScreen(Screen):
             font_size='18sp',
             markup=True,
             size_hint_y=None,
-            height=40,
+            height=dp(40),
             color=(0.9, 0.9, 0.9, 1)
         )
         summary.halign = 'center'
@@ -631,7 +631,7 @@ class OnboardingScreen(Screen):
             text=f"Theme: {theme_name}\nMode: {self.mode.capitalize()}",
             font_size='16sp',
             size_hint_y=None,
-            height=60,
+            height=dp(60),
             color=(0.7, 0.7, 0.7, 1)
         )
         self.content.add_widget(details)
@@ -644,7 +644,7 @@ class OnboardingScreen(Screen):
             text=f'Meet {self.ai_name}',
             font_size='20sp',
             size_hint=(1, None),
-            height=60,
+            height=dp(60),
             background_color=(0.2, 0.6, 0.4, 1),
             background_normal='',
             color=(1, 1, 1, 1),
@@ -658,7 +658,7 @@ class OnboardingScreen(Screen):
             text='← Go Back',
             font_size='14sp',
             size_hint=(1, None),
-            height=40,
+            height=dp(40),
             background_color=(0, 0, 0, 0),
             background_normal='',
             color=(0.6, 0.6, 0.7, 1)
