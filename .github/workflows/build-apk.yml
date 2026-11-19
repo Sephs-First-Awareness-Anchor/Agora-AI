@@ -9,11 +9,11 @@ on:
 
 env:
   PYTHON_VERSION: "3.10"
-  ANDROID_API: "33"
+  ANDROID_API: "36"
   ANDROID_MINAPI: "26"
-  ANDROID_NDK: "25b"
+  ANDROID_NDK: "28c"
   ANDROID_NDK_API: "26"
-  ANDROID_SDK: "33"
+  ANDROID_SDK: "36"
 
 jobs:
   build:
@@ -95,7 +95,7 @@ jobs:
         run: |
           set -euxo pipefail
           python -m pip install --upgrade pip setuptools wheel
-          pip install buildozer==1.5.0 cython==0.29.36
+          pip install buildozer==1.6.0 cython
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
