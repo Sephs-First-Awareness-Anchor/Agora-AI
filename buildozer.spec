@@ -28,7 +28,7 @@ source.exclude_dirs = tests,.git,.github,__pycache__,.venv,venv
 source.exclude_patterns = license,images/**/original/*
 
 # (str) Application versioning (method 1)
-version = 0.1.0
+version = 0.1.1
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
@@ -61,13 +61,13 @@ fullscreen = 0
 android.permissions = INTERNET,CAMERA,RECORD_AUDIO,VIBRATE
 
 # (int) Target Android API, should be as high as possible.
-android.api = 33
+android.api = 36
 
 # (int) Minimum API your APK / AAB will support.
 android.minapi = 26
 
 # (str) Android NDK version to use
-android.ndk = 25b
+android.ndk = 28c
 
 # (int) Android NDK API to use. This is the minimum API your app will support, it should usually match android.minapi.
 android.ndk_api = 26
@@ -181,7 +181,7 @@ android.debug_artifact = apk
 #p4a.fork = kivy
 
 # (str) python-for-android branch to use, defaults to master
-p4a.branch = v2024.01.21
+p4a.branch = v2026.05.09
 
 # (str) python-for-android specific commit to use, defaults to HEAD, must be within p4a.branch
 #p4a.commit = HEAD
@@ -249,7 +249,7 @@ android.request_legacy_external_storage = False
 android.enable_androidx = True
 
 # Target SDK version (compliance)
-android.api = 33
+android.api = 36
 
 # Don't use broad permissions
 android.wakelock = False
