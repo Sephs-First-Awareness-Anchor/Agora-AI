@@ -1,0 +1,60 @@
+name: Agora pre-APK integration checks
+
+on:
+  push:
+    branches:
+      - feature/agora-52-onboarding-live-companion
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  unit-and-integration:
+    name: 52 birth identities, learned replies and UI contracts
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install headless UI and Python dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb libsdl2-2.0-0 libgl1 libmtdev1
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Check Python syntax
+        run: python -m compileall -q app engine tests
+      - name: Run the pre-app test suites
+        env:
+          KIVY_NO_ARGS: "1"
+          KIVY_NO_CONSOLELOG: "1"
+          KIVY_LOG_LEVEL: warning
+        run: |
+          xvfb-run -a python - <<'PY'
+          import unittest
+          names = (
+              "tests.test_response_composer",
+              "tests.test_live_app_contract",
+              "tests.test_live_screens",
+              "tests.test_real_engine_smoke",
+              "tests.test_unified_birth",
+              "tests.test_device_ui_and_audio",
+              "tests.agora_integration_test",
+              "tests.test_meet_crash_fixes",
+          )
+          suite = unittest.defaultTestLoader.loadTestsFromNames(names)
+          with open("preapp-results.txt", "w", encoding="utf-8") as report:
+              result = unittest.TextTestRunner(stream=report, verbosity=2).run(suite)
+          with open("preapp-results.txt", "r", encoding="utf-8") as report:
+              print(report.read())
+          if result.testsRun < 30 or not result.wasSuccessful():
+              raise SystemExit(1)
+          PY
+      - name: Run the real app through enrollment, Meet and chat
+        env:
+          KIVY_NO_ARGS: "1"
+          KIVY_NO_CONSOLELOG: "1"
+          KIVY_LOG_LEVEL: warning
+        run: xvfb-run -a python tests/meet_flow_check.py

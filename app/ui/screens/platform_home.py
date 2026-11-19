@@ -333,7 +333,13 @@ class PlatformHomeScreen(Screen):
     
     def _launch_ai(self, *args):
         app = App.get_running_app()
-        app.screen_manager.current = 'onboarding'
+        # Do not repeat birth selection or create a second account on relaunch.
+        if getattr(app, "is_onboarded", False) and getattr(app, "serial_code", ""):
+            app.screen_manager.current = "companion"
+        elif getattr(app, "has_pending_enrollment", lambda: False)():
+            app.screen_manager.current = "name_enrollment"
+        else:
+            app.screen_manager.current = "onboarding"
     
     def _go_purchase(self, *args):
         app = App.get_running_app()

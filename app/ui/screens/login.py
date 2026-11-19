@@ -8,6 +8,7 @@ Creative, abstract, classy design with gradients and glassmorphism.
 from kivy.uix.screenmanager import Screen
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.scrollview import ScrollView
 from kivy.uix.label import Label
 from kivy.uix.button import Button
 from kivy.uix.textinput import TextInput
@@ -82,182 +83,122 @@ class LoginScreen(Screen):
         Clock.schedule_once(self._build_ui, 0)
     
     def _build_ui(self, *args):
+        """Responsive sign-in/sign-up without overlapping fixed-height widgets."""
         self.clear_widgets()
-        
-        # Root with animated gradient background
         root = FloatLayout()
-        
-        # Abstract gradient background - use bind properly
         with root.canvas.before:
-            # Deep space gradient
             Color(0.02, 0.02, 0.08, 1)
             self.bg_rect = Rectangle(pos=root.pos, size=root.size)
-            
-            # Abstract gradient orbs
-            Color(0.15, 0.05, 0.25, 0.4)
-            self.orb1 = Ellipse(pos=(dp(-100), dp(400)), size=(dp(400), dp(400)))
-            
-            Color(0.05, 0.15, 0.25, 0.3)
-            self.orb2 = Ellipse(pos=(dp(200), dp(-100)), size=(dp(350), dp(350)))
-            
-            Color(0.1, 0.3, 0.4, 0.2)
-            self.orb3 = Ellipse(pos=(dp(100), dp(600)), size=(dp(300), dp(300)))
-        
+            Color(.15, .05, .25, .30)
+            self.orb1 = Ellipse(pos=(dp(-100), dp(400)),
+                                size=(dp(400), dp(400)))
+            Color(.05, .15, .25, .22)
+            self.orb2 = Ellipse(pos=(dp(200), dp(-100)),
+                                size=(dp(350), dp(350)))
+            Color(.1, .3, .4, .15)
+            self.orb3 = Ellipse(pos=(dp(100), dp(600)),
+                                size=(dp(300), dp(300)))
         root.bind(pos=self._update_bg, size=self._update_bg)
-        
-        # Main content container
+
+        viewport = ScrollView(
+            do_scroll_x=False, bar_width=dp(4), size_hint=(1, 1),
+        )
         content = BoxLayout(
-            orientation='vertical',
-            padding=dp(30),
+            orientation='vertical', size_hint_y=None,
+            padding=[dp(20), dp(26), dp(20), dp(30)],
             spacing=dp(15),
-            pos_hint={'center_x': 0.5, 'center_y': 0.5},
-            size_hint=(0.9, 0.85)
         )
-        
-        # Spacer
-        content.add_widget(Widget(size_hint_y=0.05))
-        
-        # Logo area with glow effect
-        logo_container = BoxLayout(
-            orientation='vertical',
-            size_hint_y=None,
-            height=dp(100),
-            padding=dp(10)
+        content.bind(minimum_height=content.setter('height'))
+        viewport.add_widget(content)
+        root.add_widget(viewport)
+
+        logo = BoxLayout(
+            orientation='vertical', size_hint_y=None,
+            height=dp(112), spacing=dp(6),
         )
-        
-        logo_container.add_widget(Label(
-            text='AGORA',
-            font_size=dp(42),
-            bold=True,
-            color=(1, 1, 1, 1)
+        logo.add_widget(Label(
+            text='AGORA', font_size='40sp', bold=True, color=(1, 1, 1, 1),
         ))
-        
-        logo_container.add_widget(Label(
-            text='AI PLATFORM',
-            font_size=dp(14),
-            color=(0.4, 0.8, 1, 0.9),
-            bold=True
+        logo.add_widget(Label(
+            text='AI PLATFORM', font_size='15sp',
+            color=(.4, .8, 1, 1), bold=True,
         ))
-        
-        content.add_widget(logo_container)
-        content.add_widget(Widget(size_hint_y=0.03))
-        
-        # Mode Toggle
-        toggle_box = BoxLayout(
-            size_hint_y=None,
-            height=dp(50),
-            spacing=dp(10),
-            padding=[dp(20), 0]
+        content.add_widget(logo)
+
+        toggle = BoxLayout(
+            size_hint_y=None, height=dp(52), spacing=dp(8),
         )
-        
         self.login_btn = ToggleButton(
-            text='SIGN IN',
-            group='mode',
-            state='down',
-            font_size=dp(14),
-            background_color=(0.2, 0.5, 0.9, 0.8),
-            background_down='',
-            color=(1, 1, 1, 1),
-            bold=True
+            text='SIGN IN', group='mode', state='down',
+            font_size='14sp', background_color=(.2, .5, .9, .8),
+            background_normal='', background_down='',
+            color=(1, 1, 1, 1), bold=True,
         )
-        self.login_btn.bind(on_press=lambda x: self._set_mode('login'))
-        
         self.signup_btn = ToggleButton(
-            text='CREATE ACCOUNT',
-            group='mode',
-            font_size=dp(14),
-            background_color=(0.1, 0.1, 0.15, 0.5),
-            background_down='',
-            color=(0.6, 0.6, 0.7, 1)
+            text='CREATE ACCOUNT', group='mode',
+            font_size='14sp', background_normal='', background_down='',
+            background_color=(.1, .1, .15, .5), color=(.7, .7, .8, 1),
         )
-        self.signup_btn.bind(on_press=lambda x: self._set_mode('signup'))
-        
-        toggle_box.add_widget(self.login_btn)
-        toggle_box.add_widget(self.signup_btn)
-        content.add_widget(toggle_box)
-        
-        content.add_widget(Widget(size_hint_y=0.03))
-        
-        # Form Card
+        self.login_btn.bind(on_press=lambda *_: self._set_mode('login'))
+        self.signup_btn.bind(on_press=lambda *_: self._set_mode('signup'))
+        toggle.add_widget(self.login_btn)
+        toggle.add_widget(self.signup_btn)
+        content.add_widget(toggle)
+
         card = self._create_glass_card()
-        
-        # Form fields
         self.user_input = ModernTextInput(
-            hint_text='Username or Email',
-            size_hint_y=None,
-            height=dp(55)
+            hint_text='Username or Email', size_hint_y=None, height=dp(52),
         )
         card.add_widget(self._create_input_container('USERNAME', self.user_input))
-        
         self.pass_input = ModernTextInput(
-            hint_text='Password',
-            password=True,
-            size_hint_y=None,
-            height=dp(55)
+            hint_text='Password', password=True,
+            size_hint_y=None, height=dp(52),
         )
         self.pass_input.bind(on_text_validate=self._do_action)
         card.add_widget(self._create_input_container('PASSWORD', self.pass_input))
-        
-        # Confirm Password (signup only)
+
         self.confirm_container = BoxLayout(
-            orientation='vertical',
-            size_hint_y=None,
-            height=dp(85),
-            opacity=0
+            orientation='vertical', size_hint_y=None, height=0, opacity=0,
         )
         self.confirm_input = ModernTextInput(
-            hint_text='Confirm Password',
-            password=True,
-            size_hint_y=None,
-            height=dp(55)
+            hint_text='Confirm Password', password=True,
+            size_hint_y=None, height=dp(52),
         )
         self.confirm_container.add_widget(
-            self._create_input_container('CONFIRM PASSWORD', self.confirm_input)
-        )
+            self._create_input_container('CONFIRM PASSWORD', self.confirm_input))
         card.add_widget(self.confirm_container)
-        
-        # Error message
+
         self.error_label = Label(
-            text='',
-            font_size=dp(13),
-            color=(1, 0.4, 0.4, 1),
-            size_hint_y=None,
-            height=dp(25)
+            text='', font_size='13sp', color=(1, .4, .4, 1),
+            halign='center', size_hint_y=None, height=dp(30),
         )
+        self.error_label.bind(width=lambda widget, width: setattr(
+            widget, 'text_size', (max(60, width - dp(8)), None)))
         card.add_widget(self.error_label)
-        
-        card.add_widget(Widget(size_hint_y=0.02))
-        
-        # Action button
+
         self.action_btn = GradientButton(
-            text='SIGN IN',
-            size_hint_y=None,
-            height=dp(55),
-            gradient_colors=[(0.2, 0.5, 0.9, 1), (0.5, 0.3, 0.8, 1)]
+            text='SIGN IN', size_hint_y=None, height=dp(55),
+            gradient_colors=[(.2, .5, .9, 1), (.5, .3, .8, 1)],
         )
         self.action_btn.bind(on_release=self._do_action)
         card.add_widget(self.action_btn)
-        
+        # The card follows its real form contents; no overlapping invisible
+        # confirmation field or arbitrary fixed 360dp clipping.
+        card.bind(minimum_height=card.setter('height'))
         content.add_widget(card)
-        
-        # Footer hint
-        content.add_widget(Widget(size_hint_y=0.05))
         content.add_widget(Label(
-            text='admin / agora2024',
-            font_size=dp(11),
-            color=(0.4, 0.4, 0.5, 0.7)
+            text='Agora local preview build', font_size='12sp',
+            size_hint_y=None, height=dp(35),
+            color=(.5, .55, .7, .9),
         ))
-        
-        content.add_widget(Widget(size_hint_y=0.1))
-        
-        root.add_widget(content)
         self.add_widget(root)
-    
+        self._set_mode('login')
+
     def _create_glass_card(self):
         """Create glassmorphism card"""
         card = BoxLayout(
             orientation='vertical',
-            padding=dp(25),
+            padding=dp(16),
             spacing=dp(12),
             size_hint_y=None,
             height=dp(360)

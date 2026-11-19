@@ -42,6 +42,8 @@ No other module may:
 
 import time
 import logging
+
+from .agora_scheduling import schedule_once as _shared_schedule_once
 from enum import Enum
 from typing import Any, Optional, Callable, Dict, List
 from dataclasses import dataclass
@@ -98,14 +100,11 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 def schedule_once(callback, delay=0):
-    """Safely schedule a callback using Clock or threading fallback."""
-    if Clock is not None:
-        Clock.schedule_once(lambda dt: callback(), delay)
-    else:
-        import threading
-        timer = threading.Timer(delay, callback)
-        timer.daemon = True
-        timer.start()
+    """Safely schedule a callback using Clock or threading fallback.
+
+    Accepts both ``lambda: ...`` and Kivy-style ``lambda dt: ...``.
+    """
+    _shared_schedule_once(callback, delay)
 
 def schedule_interval(callback, interval):
     """Safely schedule a recurring callback using Clock or threading fallback."""
@@ -357,7 +356,8 @@ class OfflineAIRuntime:
         interaction_mode: InteractionMode = InteractionMode.INTROVERT,
         language: str = "en-US",
         enable_vision: bool = True,
-        enable_corpus_training: bool = False
+        enable_corpus_training: bool = False,
+        audio_engine=None
     ):
         self.ai = ai
         self.ui = ui_adapter
@@ -369,7 +369,7 @@ class OfflineAIRuntime:
         self.last_state_change = time.time()
         
         # Audio subsystem
-        self.audio = create_audio_engine(language)
+        self.audio = audio_engine if audio_engine is not None else create_audio_engine(language)
         self.audio.on_speech_result = self._on_speech_result
         self.audio.on_speaking_complete = self._on_speech_complete
         
@@ -639,15 +639,11 @@ class OfflineAIRuntime:
                 mode="extrovert" if self.mode == InteractionMode.EXTROVERT else "introvert",
                 wake_phrase=trigger
             )
+            profile.birth_record = getattr(getattr(self.ai, "onboarding_profile", None),
+                                           "birth_record", None)
             self.ai.summon(trigger, profile=profile)
         
-        # Intro is handled by AI.summon() via run_intro() - don't call twice
-        if not is_first_boot:
-            greeting = f"Hello again! I'm {self.ai_name}."
-            # Defer speech slightly to give TTS time to initialize
-            def _deferred_speak(dt):
-                self._speak_text(greeting)
-            schedule_once(_deferred_speak, 0.5)
+        # Intro/return greeting belongs to AI.summon, not two separate speakers.
     
     def dismiss(self) -> bool:
         """Dismiss the AI."""
@@ -1150,49 +1146,18 @@ class OfflineAIRuntime:
         if self.state == AIRuntimeState.SPEAKING:
             self._handle_interruption()
         
-        # Extract simulated signals from text characteristics
-        text_hash = hash(text)
-        audio_signal = AudioSignal(
-            pitch=0.5 + (text_hash % 100) / 200.0,
-            tempo=0.6,
-            volume=0.7,
-            phonetic_signature=self._extract_phonetic_signature(text),
-            voice_fingerprint=self._extract_voice_fingerprint(text),
-            timestamp=time.time()
-        )
-        
-        # Route all signals
-        self.process_audio_prosody(audio_signal)
-        
-        if audio_signal.phonetic_signature:
-            phonetic_signal = PhoneticSignal(
-                signature=audio_signal.phonetic_signature,
-                text_content=text,
-                intent=None  # Will be determined by AI
-            )
-            self.process_phonetic_signature(phonetic_signal)
-        
-        if audio_signal.voice_fingerprint:
-            self.process_voice_recognition(audio_signal.voice_fingerprint, text)
-        
+        # Android SpeechRecognizer supplies a transcript, NOT raw PCM.
+        # In particular, never fabricate pitch, phonemes, or a speaker
+        # fingerprint from a text hash or the current time.
         self._process_text_input(text)
-    
-    def _extract_phonetic_signature(self, text: str) -> str:
-        """Extract simplified phonetic signature from text."""
-        # Simplified - would use actual audio features
-        words = text.lower().split()
-        if not words:
-            return "vowel_mid"
-        
-        # Characterize by first letters of words
-        sig = "".join([w[0] for w in words[:3] if w])
-        return f"sig_{sig}" if sig else "vowel_mid"
-    
-    def _extract_voice_fingerprint(self, text: str) -> str:
-        """Extract voice fingerprint - simulated."""
-        # In real implementation, this comes from audio analysis
-        import hashlib
-        return hashlib.md5(f"voice_{time.time() // 60}".encode()).hexdigest()[:16]
+
+    def _extract_phonetic_signature(self, text: str):
+        """Transcript-only callback has no acoustic phonetic signature."""
+        return None
+
+    def _extract_voice_fingerprint(self, text: str):
+        """A spoken name or ASR transcript cannot establish speaker identity."""
+        return None
     
     def _on_speech_complete(self) -> None:
         """Handle TTS completion."""
@@ -1287,13 +1252,12 @@ class OfflineAIRuntime:
                 return
             
             # Update phonetic signal with determined intent
-            if hasattr(self.ai, 'audio') and analysis.get('language', {}).get('intent'):
-                phonetic_signal = PhoneticSignal(
-                    signature=self._extract_phonetic_signature(text),
+            signature = self._extract_phonetic_signature(text)
+            if signature and hasattr(self.ai, "audio") and analysis.get("language",{}).get("intent"):
+                self.process_phonetic_signature(PhoneticSignal(
+                    signature=signature,
                     text_content=text,
-                    intent=analysis['language']['intent']
-                )
-                self.process_phonetic_signature(phonetic_signal)
+                    intent=analysis["language"]["intent"]))
             
             self._generate_response(analysis)
         except Exception as e:
@@ -1440,6 +1404,8 @@ class OfflineAIRuntime:
                     mode="extrovert" if self.mode == InteractionMode.EXTROVERT else "introvert",
                     wake_phrase="come on"
                 )
+                profile.birth_record = getattr(getattr(self.ai, "onboarding_profile", None),
+                                               "birth_record", None)
                 self.ai.run_intro(profile)
             except Exception as e:
                 logger.error(f"[RUNTIME] Intro error: {e}")
@@ -1559,11 +1525,12 @@ class OfflineAIRuntime:
 
 def create_runtime(ai, screen, interaction_mode: str = "introvert",
                    language: str = "en-US", enable_vision: bool = True,
-                   enable_corpus: bool = False) -> OfflineAIRuntime:
+                   enable_corpus: bool = False, audio_engine=None) -> OfflineAIRuntime:
     """Create and boot Runtime."""
     mode = InteractionMode.EXTROVERT if interaction_mode.lower() == "extrovert" else InteractionMode.INTROVERT
     ui_adapter = AIRuntimeUIAdapter(screen)
-    runtime = OfflineAIRuntime(ai, ui_adapter, mode, language, enable_vision, enable_corpus)
+    runtime = OfflineAIRuntime(ai, ui_adapter, mode, language, enable_vision,
+                               enable_corpus, audio_engine=audio_engine)
     runtime.boot()
     ai.runtime = runtime
     return runtime

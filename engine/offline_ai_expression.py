@@ -1319,8 +1319,8 @@ class OrderTier:
         return random.choice(words) if words else ""
 
 class IntentEvolutionRegistry:
-    def __init__(self, base_intents):
-        self.evo = SelfGenerativeEvolution()
+    def __init__(self, base_intents, persistence_dir: str = "./offline_ai_data/evolution"):
+        self.evo = SelfGenerativeEvolution(persistence_dir)
         self.base_intents = list(base_intents)
     def observe(self, intent_a, intent_b, template_learner=None, response_text=None):
         self.evo.evolution_registry.observe(intent_a, intent_b)
@@ -1337,7 +1337,7 @@ class IntentEvolutionRegistry:
         return key if key in self.evo.evolution_registry.hybrids else None
 
 class LanguageTemplateLearner:
-    def __init__(self): self.evo = SelfGenerativeEvolution()
+    def __init__(self, evo: Optional[SelfGenerativeEvolution] = None): self.evo = evo or SelfGenerativeEvolution()
     def extract_template(self, text): return self.evo.template_learner.extract_template(text)
     def observe(self, intent, category, response_text): self.evo.template_learner.observe("language", f"{intent}_{category}", response_text)
     @property
@@ -1374,7 +1374,8 @@ class LanguageBootstrap:
             logger.error(f"[LANGUAGE] Failed to create storage directory {persistence_dir}: {e}")
         self.lexicon = lexicon
         self.transcendence = TranscendenceTier()
-        self.intent_evolution = IntentEvolutionRegistry(self.transcendence.intents.keys())
+        self.intent_evolution = IntentEvolutionRegistry(self.transcendence.intents.keys(),
+                                                        str(self.persistence_dir / "evolution"))
         self.harmony = HarmonyTier()
         self.order = OrderTier(evolution_engine=self.intent_evolution.evo)
         self.conversation_context, self.current_intent, self.current_style = [], "", {}
@@ -1384,7 +1385,7 @@ class LanguageBootstrap:
     def _bootstrap_from_corpus(self):
         if not os.path.exists(self.corpus_path): return
         bootstrap = CorpusBootstrap(self.corpus_path)
-        self.template_learner = LanguageTemplateLearner()
+        self.template_learner = LanguageTemplateLearner(self.intent_evolution.evo)
         messages = bootstrap.extract_user_messages(bootstrap.load_conversations())
         last_intent = None
         for text in messages:
@@ -1397,7 +1398,9 @@ class LanguageBootstrap:
         hybrids = self.intent_evolution.promote_stable_hybrids(threshold=threshold)
         for name, meta in hybrids.items(): self.transcendence.register_hybrid(name, meta["base"])
         self.order.learned_templates = self.template_learner.templates
-    def process_input(self, text: str, personalized_params: Dict[str, Dict[str, float]] = None) -> Dict[str, Any]:
+    def process_input(self, text: str, personalized_params: Dict[str, Dict[str, float]] = None,
+                      commit: bool = True) -> Dict[str, Any]:
+        """Analyse a user turn. commit=False is a read-only pre-pass (no learning, no context)."""
         # 0. Lexical analysis for unknown tokens and context
         words = re.findall(r'\w+', text.lower())
         unknown_tokens = []
@@ -1420,7 +1423,10 @@ class LanguageBootstrap:
                     # Blend or override if very strong
                     intent = best_lex_intent
                     confidence = min(1.0, confidence + 0.2)
-        hybrid = self.intent_evolution.get_stable_hybrid(intent, intent)
+        # Hybrids form from consecutive intents (stored under the sorted pair)
+        hybrid = None
+        if self._last_intent and self._last_intent != intent and "_HYBRID" not in self._last_intent:
+            hybrid = self.intent_evolution.get_stable_hybrid(*sorted([self._last_intent, intent]))
         if hybrid:
             intent = hybrid
             confidence = min(1.0, confidence + 0.15)
@@ -1431,18 +1437,21 @@ class LanguageBootstrap:
                 strategy = self.transcendence.get_strategy(base_a) or self.transcendence.get_strategy(base_b)
             except Exception: pass
         if strategy is None: strategy = "default_response"
-        if self._last_intent:
-            try: self.intent_evolution.observe(self._last_intent, intent)
-            except Exception: pass
-        self._last_intent = intent
+        if commit:
+            base_intent = intent.split("_")[0] if "_HYBRID" in intent else intent
+            if self._last_intent:
+                try: self.intent_evolution.observe(self._last_intent, base_intent)
+                except Exception: pass
+            self._last_intent = base_intent
         style = self.harmony.compute_style_vector(intent, weights, personalized_params)
         pattern_categories = self._determine_pattern_needs(intent, text)
         selected_patterns = {}
         for cat in pattern_categories:
             pattern = self.order.select_pattern(cat, style, intent=intent)
             if pattern: selected_patterns[cat] = pattern.template
-        self.current_intent, self.current_style = intent, style
-        self.conversation_context.append({"role": "user", "text": text, "intent": intent, "style": style})
+        if commit:
+            self.current_intent, self.current_style = intent, style
+            self.conversation_context.append({"role": "user", "text": text, "intent": intent, "style": style})
         return {"intent": intent, "intent_confidence": confidence, "inner_weights": weights, "response_strategy": strategy, "style": style, "patterns": selected_patterns, "vocabulary_tone": self._get_vocabulary_tone(style)}
     def _determine_pattern_needs(self, intent: str, text: str) -> List[str]:
         needs = []
@@ -1457,6 +1466,8 @@ class LanguageBootstrap:
         f = style.get("formality", 0.5)
         return "formal" if f > 0.65 else ("warm" if f < 0.35 else "neutral")
     def generate_response_skeleton(self, analysis: Dict[str, Any], core_content: str) -> str:
+        if analysis.get("composed"):
+            return re.sub(r'\s+([.,!?])', r'\1', re.sub(r'\s+', ' ', core_content or "")).strip()
         parts = []
         patterns, style = analysis.get("patterns", {}), analysis.get("style", {})
         if "greeting" in patterns: parts.append(patterns["greeting"].format(continuation="").strip())
@@ -1515,7 +1526,10 @@ try:
     KIVY_AVAILABLE = True
 except ImportError:
     KIVY_AVAILABLE = False
-    Widget = object  # Fallback base class
+
+    class Widget:  # Fallback base class (headless / desktop tests)
+        def __init__(self, **kwargs):
+            pass
 
 class FaceState:
     """Continuous parameter state for the procedural face."""

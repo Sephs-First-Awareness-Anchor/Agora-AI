@@ -14,6 +14,8 @@ Components:
 """
 
 import logging
+
+from .agora_scheduling import schedule_once as _shared_schedule_once
 import threading
 import time
 from typing import Callable, Optional
@@ -70,14 +72,11 @@ else:
 # ============================================================================
 
 def schedule_once(callback, delay=0):
-    """Safely schedule a callback using Clock or threading fallback."""
-    if Clock is not None:
-        Clock.schedule_once(lambda dt: callback(), delay)
-    else:
-        import threading
-        timer = threading.Timer(delay, callback)
-        timer.daemon = True
-        timer.start()
+    """Safely schedule a callback using Clock or threading fallback.
+
+    Accepts both ``lambda: ...`` and Kivy-style ``lambda dt: ...``.
+    """
+    _shared_schedule_once(callback, delay)
 
 # ============================================================================
 # ENUMERATIONS
@@ -773,6 +772,67 @@ class AudioEngine:
         """Check if both subsystems are ready"""
         return self.tts.is_ready and self.recognizer.is_ready
     
+    def capture_name_pcm(self, duration_seconds: float = 1.8,
+                         sample_rate: int = 16000) -> bytes:
+        """Capture genuine PCM16 from Android, without a second audio engine.
+
+        Run on a worker thread only. Android AudioRecord's ByteBuffer
+        overload avoids importing a nonexistent `jnius.jarray` helper.
+        No audio files or text-derived acoustic signatures are created.
+        """
+        if not (IS_ANDROID and JNIUS_AVAILABLE):
+            raise RuntimeError("Microphone capture requires Android audio support")
+        if not 0.4 <= duration_seconds <= 3.0:
+            raise ValueError("Enrollment recordings must be 0.4–3 seconds")
+        self.stop_listening()
+        from jnius import autoclass
+        AudioRecord = autoclass("android.media.AudioRecord")
+        AudioFormat = autoclass("android.media.AudioFormat")
+        Source = autoclass("android.media.MediaRecorder$AudioSource")
+        ByteBuffer = autoclass("java.nio.ByteBuffer")
+        minimum = AudioRecord.getMinBufferSize(
+            sample_rate, AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT)
+        if minimum <= 0:
+            raise RuntimeError("This microphone cannot capture 16-bit PCM at 16 kHz")
+        chunk_size = max(int(minimum), 4096)
+        if chunk_size % 2:
+            chunk_size += 1
+        recorder = AudioRecord(
+            Source.MIC, sample_rate, AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT, chunk_size * 2)
+        if recorder.getState() != AudioRecord.STATE_INITIALIZED:
+            recorder.release()
+            raise RuntimeError("Microphone unavailable or audio permission denied")
+        wanted = int(sample_rate * duration_seconds) * 2
+        collected = bytearray()
+        buffer = ByteBuffer.allocateDirect(chunk_size)
+        try:
+            recorder.startRecording()
+            if recorder.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING:
+                raise RuntimeError("Android could not start the microphone")
+            while len(collected) < wanted:
+                remaining = wanted - len(collected)
+                count = min(chunk_size, remaining)
+                buffer.clear()
+                # A direct ByteBuffer selects AudioRecord.read(ByteBuffer,int,int).
+                # The ByteBuffer position is not advanced by Android's read.
+                amount = int(recorder.read(buffer, count, AudioRecord.READ_BLOCKING))
+                if amount <= 0:
+                    raise RuntimeError(f"Microphone stopped while recording ({amount})")
+                buffer.position(0)
+                data = bytearray(amount)
+                # PyJNIus copies mutated Java byte[] values into bytearray.
+                buffer.get(data, 0, amount)
+                collected.extend(data)
+        finally:
+            try:
+                recorder.stop()
+            except Exception:
+                pass
+            recorder.release()
+        return bytes(collected)
+
     # ========================================================================
     # SPEECH RECOGNITION CONTROL (Called by Runtime only)
     # ========================================================================

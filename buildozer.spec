@@ -28,11 +28,13 @@ source.exclude_dirs = tests,.git,.github,__pycache__,.venv,venv
 source.exclude_patterns = license,images/**/original/*
 
 # (str) Application versioning (method 1)
-version = 0.1.0
+version = 0.1.1
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy==2.3.0,kivymd==1.2.0,numpy,cryptography,pillow,pyjnius
+# Kivy 2.x compiles only with Cython 3.0, which cannot target Python 3.14,
+# so the app's Python stays on 3.13 while the Android target is API 36.
+requirements = python3==3.13.18,hostpython3==3.13.18,kivy==2.3.1,kivymd==1.2.0,numpy,pillow,pyjnius
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
@@ -61,13 +63,13 @@ fullscreen = 0
 android.permissions = INTERNET,CAMERA,RECORD_AUDIO,VIBRATE
 
 # (int) Target Android API, should be as high as possible.
-android.api = 33
+android.api = 36
 
 # (int) Minimum API your APK / AAB will support.
 android.minapi = 26
 
 # (str) Android NDK version to use
-android.ndk = 25b
+android.ndk = 28c
 
 # (int) Android NDK API to use. This is the minimum API your app will support, it should usually match android.minapi.
 android.ndk_api = 26
@@ -181,7 +183,7 @@ android.debug_artifact = apk
 #p4a.fork = kivy
 
 # (str) python-for-android branch to use, defaults to master
-#p4a.branch = master
+p4a.branch = v2026.05.09
 
 # (str) python-for-android specific commit to use, defaults to HEAD, must be within p4a.branch
 #p4a.commit = HEAD
@@ -249,7 +251,7 @@ android.request_legacy_external_storage = False
 android.enable_androidx = True
 
 # Target SDK version (compliance)
-android.api = 33
+android.api = 36
 
 # Don't use broad permissions
 android.wakelock = False

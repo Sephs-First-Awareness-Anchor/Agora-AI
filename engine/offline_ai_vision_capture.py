@@ -16,6 +16,8 @@ to the AI's vision system.
 """
 
 import logging
+
+from .agora_scheduling import schedule_once as _shared_schedule_once
 import threading
 import time
 from typing import Callable, Optional, Dict, Any
@@ -40,14 +42,11 @@ IS_ANDROID = (platform == 'android') if platform else False
 
 # Safe scheduling helper
 def schedule_once(callback, delay=0):
-    """Safely schedule a callback using Clock or threading fallback."""
-    if Clock is not None:
-        Clock.schedule_once(lambda dt: callback(), delay)
-    else:
-        import threading
-        timer = threading.Timer(delay, callback)
-        timer.daemon = True
-        timer.start()
+    """Safely schedule a callback using Clock or threading fallback.
+
+    Accepts both ``lambda: ...`` and Kivy-style ``lambda dt: ...``.
+    """
+    _shared_schedule_once(callback, delay)
 
 if IS_ANDROID:
     try:
