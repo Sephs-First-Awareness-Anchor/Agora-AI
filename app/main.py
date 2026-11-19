@@ -10,6 +10,7 @@ Kivy application managing onboarding and companion screens.
 import os
 import json
 import logging
+import threading
 from pathlib import Path
 from datetime import datetime
 
@@ -22,6 +23,7 @@ from kivy.properties import ObjectProperty, StringProperty, BooleanProperty
 
 from app.ui.components.theme import ThemeManager, COLOR_THEMES
 from app.ui.screens.onboarding import OnboardingScreen
+from app.ui.screens.name_enrollment import NameEnrollmentScreen
 from app.ui.screens.companion import CompanionScreen
 from app.ui.screens.platform_home import PlatformHomeScreen
 from app.ui.screens.purchase import PurchaseScreen
@@ -32,6 +34,9 @@ from app.entity_manager import EntityManager, EntityIdentity
 # Import core AI modules
 from engine.offline_ai_core import OfflineAIFactory, OfflineAI
 from engine.offline_ai_expression import OnboardingProfile
+from engine.agora_enrollment import EnrollmentSession
+from engine.agora_birth import BirthStore, select_birth
+from engine.offline_ai_audio_engine import create_audio_engine
 logger = logging.getLogger(__name__)
 
 # Storage paths
@@ -122,6 +127,9 @@ class KOCompanionApp(App):
         self._storage_initialized = False
         self._ai_activated = False  # Prevents double activation
         self._first_boot_pending = False
+        self.enrollment_audio = None
+        self.enrollment_session = None
+        self.birth_record = None
         
         # Authentication system
         self.auth = None
@@ -214,12 +222,14 @@ class KOCompanionApp(App):
         self.platform_home_screen = PlatformHomeScreen(name='platform_home')
         self.purchase_screen = PurchaseScreen(name='purchase')
         self.onboarding_screen = OnboardingScreen(name='onboarding')
+        self.name_enrollment_screen = NameEnrollmentScreen(name='name_enrollment')
         self.companion_screen = CompanionScreen(name='companion')
 
         self.screen_manager.add_widget(self.login_screen)
         self.screen_manager.add_widget(self.platform_home_screen)
         self.screen_manager.add_widget(self.purchase_screen)
         self.screen_manager.add_widget(self.onboarding_screen)
+        self.screen_manager.add_widget(self.name_enrollment_screen)
         self.screen_manager.add_widget(self.companion_screen)
 
         # Start at Platform Home if has license, otherwise Login
@@ -298,6 +308,82 @@ class KOCompanionApp(App):
         """Public method to save config (called from screens)"""
         self._save_config()
     
+    def get_pending_enrollment(self):
+        """Reload the one saved six-sample session after a process restart."""
+        if not self._storage_initialized:
+            self._init_storage()
+        if self.enrollment_session is None:
+            pending = Path(self.storage_path) / "enrollment" / "pending.json"
+            self.enrollment_session = EnrollmentSession(pending)
+        return self.enrollment_session
+
+    def has_pending_enrollment(self):
+        return bool(self.storage_path and
+                    (Path(self.storage_path) / "enrollment" / "pending.json").exists()
+                    and not self.is_onboarded)
+
+    def begin_name_enrollment(self, user_name: str, ai_name: str,
+                              favorite_color: str, mode: str, birthday: str):
+        """Prepare locally; create no AI account and no composer until six PCM takes."""
+        if self.is_onboarded:
+            raise ValueError("This companion is already born; do not re-enroll as new")
+        if not self._storage_initialized:
+            if not self._init_storage():
+                raise RuntimeError("Local storage unavailable")
+        identity = {"user_name":user_name.strip(), "ai_name":ai_name.strip(),
+                    "color":favorite_color, "mode":mode, "dob":birthday}
+        self.enrollment_session = EnrollmentSession(
+            Path(self.storage_path) / "enrollment" / "pending.json", identity)
+        if self.enrollment_audio is None:
+            self.enrollment_audio = create_audio_engine("en-US")
+        if kivy_platform == "android":
+            from android.permissions import request_permissions, Permission
+            request_permissions([Permission.RECORD_AUDIO])
+        self.screen_manager.current = "name_enrollment"
+
+    def capture_enrollment_name(self, done):
+        """Exactly one short recording at a time, owned by the audio subsystem."""
+        session=self.get_pending_enrollment()
+        target=session.next_target()
+        if target is None:
+            Clock.schedule_once(lambda dt: done("Six samples already recorded"),0)
+            return
+        if self.enrollment_audio is None:
+            self.enrollment_audio = create_audio_engine("en-US")
+
+        def worker():
+            error=None
+            try:
+                pcm=self.enrollment_audio.capture_name_pcm(
+                    duration_seconds=1.8, sample_rate=16000)
+                session.add_pcm(target,pcm,16000)
+            except Exception as exc:
+                logger.warning("[ENROLLMENT] Audio sample not accepted: %s",exc)
+                error=str(exc)
+            Clock.schedule_once(lambda dt: done(error),0)
+        threading.Thread(target=worker,daemon=True,name="agora-name-enrollment").start()
+
+    def finish_name_enrollment(self):
+        session=self.get_pending_enrollment()
+        if not session.ready():
+            raise ValueError("Three owner-name and three AI-name samples are required")
+        identity=session.data["identity"]
+        self.complete_onboarding(
+            user_name=identity["user_name"],ai_name=identity["ai_name"],
+            favorite_color=identity["color"],mode=identity["mode"],
+            birthday=identity["dob"])
+
+    def reset_name_enrollment(self):
+        """Delete local provisional pronunciation/speaker data before commitment."""
+        if self.is_onboarded:
+            raise ValueError("A committed companion cannot be reset by onboarding")
+        session=self.get_pending_enrollment()
+        if session.data.get("birth_account"):
+            raise ValueError("Account commit underway; complete recovery rather than reset")
+        session.path.unlink(missing_ok=True)
+        self.enrollment_session=None
+        self.screen_manager.current="onboarding"
+
     def complete_onboarding(self, user_name: str, ai_name: str,
                            favorite_color: str, mode: str, birthday: str):
         """
@@ -312,6 +398,20 @@ class KOCompanionApp(App):
                 if not self._init_storage():
                     logger.error("[APP] Critical: Storage could not be initialized during onboarding")
 
+            # A hard lifecycle gate: never initialize AI from typed fields alone.
+            session=self.get_pending_enrollment()
+            if not session.ready():
+                raise ValueError("Pronunciation enrollment is incomplete")
+            identity=session.data["identity"]
+            if (identity["user_name"],identity["ai_name"],identity["mode"],
+                    identity["color"],identity["dob"]) != (
+                    user_name,ai_name,mode,favorite_color,birthday):
+                raise ValueError("Enrollment identity differs from requested birth")
+            sample_result=session.result()
+            decision=select_birth(
+                ai_name=ai_name, mode=mode, color=favorite_color, dob=birthday,
+                ai_pronunciation=sample_result["ai_pronunciation"],
+                user_enrollment_complete=True, require_audio=True)
             # Store user preferences
             self.user_name = user_name
             self.ai_name = ai_name
@@ -339,10 +439,20 @@ class KOCompanionApp(App):
             logger.info(f"[APP] Initializing AI factory at: {ai_data_path}")
             self.factory = OfflineAIFactory(ai_data_path)
 
-            # Create new account
-            logger.info(f"[APP] Creating new account for: {user_name}")
-            account_id, serial_code = self.factory.create_new_account(f"{user_name}@local")
+            # Crash-safe pending account checkpoint, then immutable birth file.
+            prior=session.data.get("birth_account")
+            if prior:
+                account_id, serial_code = prior["id"], prior["serial_code"]
+            else:
+                account_id, serial_code = self.factory.create_new_account(f"{user_name}@local")
+                session.stage_account(account_id,serial_code)
+            self.birth_record=BirthStore(Path(ai_data_path) / account_id).commit(decision)
+            if (self.birth_record["primary"] != decision.primary
+                    or self.birth_record["secondary"] != decision.secondary
+                    or self.birth_record["mode"] != decision.mode):
+                raise ValueError("Existing committed birth conflicts with enrollment")
             self.serial_code = serial_code
+            session.mark_committed(account_id,serial_code)
 
             # Mark as onboarded
             self.is_onboarded = True
@@ -471,6 +581,19 @@ class KOCompanionApp(App):
                     favorite_color=self.favorite_color or "blue",
                     mode=self.mode or "introvert"
                 )
+                # All new companions must already have an immutable birth.
+                # Existing accounts without one are treated as legacy and
+                # keep their saved variation profile without reassignment.
+                is_valid, account_id, _ = self.factory.account_manager.verify_serial_code(
+                    self.serial_code)
+                if not is_valid:
+                    raise ValueError("Saved companion serial cannot be verified")
+                birth_profile.birth_record = BirthStore(
+                    self.factory.storage_dir / account_id).read()
+                self.birth_record=birth_profile.birth_record
+                if self.birth_record and self.birth_record["mode"] != self.mode:
+                    self.mode = self.birth_record["mode"]
+                    birth_profile.mode = self.mode
                 self.ai_instance = self.factory.activate(
                     self.serial_code,
                     device_id=device_id,
@@ -493,8 +616,12 @@ class KOCompanionApp(App):
                         interaction_mode=self.mode,
                         language="en-US",
                         enable_vision=True,
-                        enable_corpus=False
+                        enable_corpus=False,
+                        audio_engine=self.enrollment_audio
                     )
+
+                    # Runtime takes exclusive ownership of the prebirth audio engine.
+                    self.enrollment_audio = None
 
                     # Connect screen to AI and Runtime
                     self.companion_screen.connect_ai(self.ai_instance, self.ai_runtime)
