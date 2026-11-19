@@ -1,83 +1,132 @@
-# Agora: 52 birth configurations and live companion integration
+# Agora unified birth and voice enrollment: pre-APK implementation
 
-This integration branch descends from Agora PR #2 (the learned-response
-composer). The composer and its original tests remain included.
+**Architecture directive:** `AGORA_UNIFIED_BIRTH_AND_VOICE_IMPLEMENTATION_DIRECTIVE.md`
+supplied 18 November 2026. PR #3 includes PR #2's learned-response composer
+and the original live onboarding/companion repair.
 
-## The original A-Z onboarding contract
+## Product behavior
 
-The original five-step onboarding chooses a name, favorite color,
-introvert/extrovert behavior, user name, and birthday. The first character
-of the AI name selects one of the 26 `BOOT_PERSONAS` through
-`LETTER_PERSONA_MAP` (invalid letters use the original B fallback).
-These personas retain their facial affect, intro sequence, and expressive
-bias, regardless of behavioral mode.
+The 13 existing specialization aptitudes and their 13 ring-neighbor
+**unordered** pair families remain canonical. Each family permits the
+60/40 and 40/60 orientation, and the user's explicitly selected AI mode
+(introvert or extrovert) provides **52** potential birth configurations.
 
-The **same name-letter selection** determines a frozen specialization pair:
-A-M select thirteen ordered primary/secondary pairs, and N-Z select the
-same thirteen pairs with priorities reversed. Extrovert and introvert
-settings yield 26 configurations each, totaling **52**.
+The 26 `BOOT_PERSONAS` are a *separate* expressive dimension. They are
+ranked for trait coherence **only within their actual metadata mode**.
+Seventeen are introvert-eligible and twenty-four extrovert-eligible.
+Personas are not a false A–Z equivalent of the 26 ordered specialization
+pairs.
 
-The current thirteen base pairs form a fixed cyclic ring of the 13 existing
-`SpecializationType` members. This explicit ring is the initial companion
-pairing policy; the user-defined 13 pair meanings can be refined later,
-but must be versioned rather than silently randomized.
+The original first-letter selector remains only as a **legacy compatibility
+helper**. New birth uses `engine/agora_birth.py`, with a documented
+eight-axis trait vector and constrained shortlist/ordered-pair/persona
+choice. Candidate group weights are:
+AI name .76, color .16, optional DOB archetype .05, optional mode-soft
+preference .03. When an optional group is absent, the remaining weights
+are normalized. Same-source phonetic measurements are never counted as
+independent agreement votes. An explicit capped +/- .05 directional
+bonus reinforces actual cross-group agreement. The mode itself is a hard
+user selection; the soft mode vote cannot change it. The DOB group is a
+weak *creative archetype*, not evidence of human personality.
 
-## Variation and persistence
+The 13 ring pairs are still the existing provisional neighboring-aptitude
+families. The new selector chooses among those families from the
+measured name cues and other independently supplied evidence; it does
+not choose an arbitrary partner from all 13x12 combinations.
 
-The first-boot account receives an `AIVariationProfile` with the pair
-and mode chosen by onboarding. Its account-specific ability multipliers
-and personality offsets are generated only once and persisted; the
-birth pairing is deterministic but each individual's development is not.
+## Mandatory enrollment before birth
 
-Old profile files from PR #2 retain their ability multipliers, personality
-offsets, and conversational learning data. On first verified onboarding
-binding, the random legacy pair is replaced by the name-led pair. Further
-unrequested changes to an already bound birth identity are ignored.
+1. User supplies two **distinct typed names**: their own for address/speaker
+   enrollment, and the AI's for one-time birth selection. Also supplies
+   the existing favorite color, AI mode, and optional DOB.
+2. The app stores `PENDING_ENROLLMENT` before account creation. It then
+   requires **three usable PCM takes of the user's name and three of the
+   AI's name**, in that order, using `NameEnrollmentScreen`.
+3. `AudioEngine.capture_name_pcm` temporarily owns exclusive Android
+   `AudioRecord` capture for each short segment, off the UI thread. The
+   same audio engine instance is handed to `OfflineAIRuntime` after
+   birth. No second continuous microphone loop is created.
+4. `engine/agora_enrollment.py` processes local PCM16 with numeric
+   RMS/voicing, spectral, stress-location and rhythm measures. Raw PCM
+   is discarded; only necessary feature records are persisted. Silence,
+   too-short segments, and invalid PCM cannot count as enrollment.
+5. Six accepted takes produce one pronunciation consensus per name and
+   a conservative, **provisional** speaker feature reference. Three
+   repetitions of one name are still one correlated source for birth.
+6. `BirthStore.commit` makes a complete, fsynced and atomically linked,
+   exactly-once `birth_record.json` per account. The account ID is
+   first checkpointed to the pending file to enable interrupted-onboarding
+   recovery. Repeating completion cannot replace a saved birth.
+7. Only then does `app/main.py` activate the AI and pass the birth record
+   to the language-composer and intro-persona paths. New core
+   initialization with onboarding identity but no committed birth is
+   rejected.
+8. Old accounts are explicitly distinguished as `LEGACY_EXISTING`; their
+   existing variation state is **not automatically reassigned** based on
+   updated names or pronunciation.
 
-The capability manifest now records behavioral mode alongside primary/
-secondary and includes it in the identity fingerprint.
+## Identity and learning separation
 
-## Integrated runtime
+- `birth_record.json`: fixed pair, orientation, mode, expression persona,
+  selector version, weights version, source quality and limited trait
+  provenance. No birth recalculation after creation.
+- `composer/variation_profile.json`: original PR #2's seeded individual
+  ability multipliers, offsets and continued learned responses. This
+  consumes a committed pair for new accounts and preserves saved state.
+- `voice_learning.json`: independently mutable user-name and AI-name
+  pronunciation candidates and provisional speaker embeddings. The
+  companion UI exposes a confirmed local deletion action that does not
+  modify birth or learned conversation history.
+- Android `SpeechRecognizer` returns text, not guaranteed PCM. The
+  runtime no longer manufactures speaker fingerprints from the clock
+  or prosody/phonetics from text hashes. In transcript-only sessions,
+  voice identification **abstains** rather than fabricating evidence.
 
-1. The original multistep onboarding calls `App.complete_onboarding` and
-   stores the account/serial/profile. Returning users skip re-onboarding.
-2. `App._activate_ai` constructs the name/mode/color user profile and
-   passes it through the factory *before* the core initializes its composer.
-3. The companion screen attaches the existing procedural face widget and
-   holds one `OfflineAIRuntime`.
-4. Typed input uses `runtime._process_text_input`; recognized speech uses
-   the same runtime's ASR callback path.
-5. `AIRuntimeUIAdapter.set_speaking` delivers actual response text to
-   `CompanionScreen._show_speech`, populating the chat transcript.
-6. The composer in PR #2 builds learned reply content and the existing
-   `OfflineAI.generate_response` handles the rest of the learning loop.
-7. Extroverted behavior is no longer erased when the cognitive autonomy
-   governor clamps its autonomy limit. Runtime mode and intro persona persist.
-8. A topical continuation can alter response selection fitness but cannot
-   be treated as *explicit approval* for promoting a reply template.
+## Validation already possible without a phone
 
-## Pre-app validation
-
-GitHub Actions runs `.github/workflows/agora-preapp.yml`, checking
-Python compilation and the specialization, response-composer, original
-Agora integration, and UI contract tests. Locally, with dependencies
-installed:
+`python -m compileall -q app engine tests`
 
 ```sh
-python -m compileall -q app engine tests
 xvfb-run -a python -m unittest -v \
-  tests.test_response_composer tests.test_live_app_contract \
+  tests.test_response_composer \
+  tests.test_live_app_contract \
+  tests.test_live_screens \
+  tests.test_real_engine_smoke \
+  tests.test_unified_birth \
   tests.agora_integration_test
 ```
 
-This is **not** a completed Android device test. Android-specific audio
-permissions, ASR callbacks, background processing, TTS sequencing, face
-animation and interaction latency require validation on physical hardware.
+The GitHub `agora-preapp.yml` workflow executes the suites automatically.
+A synthetic PCM waveform in tests proves feature computation and persistence
+contracts, **not** a successful Android capture or reliable voice recognition.
 
-## Remaining product-level blockers
+## Unresolved gates before app testing or production claims
 
-Authentication and license security remain prototype-level, so do not
-treat successful engine/UI checks as approval for public distribution.
-The runtime currently processes typed input on the Kivy event loop;
-physical-device responsiveness and queueing need measured validation
-before production deployment.
+1. **Android hardware PCM:** exercise real permissions, `AudioRecord`
+   initialization and timely release, repeated recording quality,
+   background noise, different accents, phone orientation and relaunch.
+   Verify sample rate, byte order, UI thread safety and actual waveform.
+2. **Phonetic fidelity:** current PCM features are measured acoustic
+   *proxies*, not verified phoneme transcription, accent-sensitive
+   alignment or a linguistically calibrated pronunciation recognizer.
+   Test and improve stressed sounds/segment alignment with actual names
+   before declaring that part complete.
+3. **Speaker identity:** six short name utterances only seed a provisional
+   reference. API supports local abstention and consented other-speaker
+   enrollment, but live voice recognition, known-other rejection metrics,
+   false acceptance/rejection and continuous acoustic update have **not**
+   been validated. ASR's text-only callback cannot supply those signals.
+   Voice confidence never authorizes privileged operations.
+4. **Personality inference:** the descriptor map, weights, DOB archetypes,
+   and agreement bonus are versioned engineering hypotheses. Quantify
+   assignment stability, 13-family reachability across diverse names,
+   boundary cases, and cultural/language bias. Do not label personality
+   predictions scientifically measured.
+5. **End-to-end device lifecycle:** verify the 6-take UI, restart between
+   captures, one-time birth, actual face intro, learned replies, and
+   no UI stalls in real Android operation.
+6. **Production security:** existing prototype authentication/licensing
+   requires a separate security pass before public distribution.
+
+**PR #3 stays draft.** Passing software tests make it reviewable; they
+do not establish the hardware and acoustic acceptance gates above.
