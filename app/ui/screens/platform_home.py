@@ -336,6 +336,8 @@ class PlatformHomeScreen(Screen):
         # Do not repeat birth selection or create a second account on relaunch.
         if getattr(app, "is_onboarded", False) and getattr(app, "serial_code", ""):
             app.screen_manager.current = "companion"
+        elif getattr(app, "has_pending_enrollment", lambda: False)():
+            app.screen_manager.current = "name_enrollment"
         else:
             app.screen_manager.current = "onboarding"
     
